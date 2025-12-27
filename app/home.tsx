@@ -1,0 +1,376 @@
+import React, { useState, useRef } from 'react';
+import {
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  LayoutChangeEvent,
+  Text,
+  Keyboard,
+  TouchableWithoutFeedback,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import MapView, { Marker } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import SlidingCard, { SlidingCardRef } from '@/components/common/SlidingCard';
+import MapHeader, { UpgradePopup } from '@/components/navigation/MapHeader';
+import BottomNav from '@/components/navigation/BottomNav';
+import LinkBottomSheet from '@/components/modals/LinkBottomSheet';
+import Toast from '@/components/common/Toast';
+import PlaceTransition from '@/components/places/PlaceTransition';
+import AddToCollectionModal from '@/components/collections/AddToCollectionModal';
+import PlansScreen from './plans';
+import CollectionsScreen from './collections';
+import { analyzeLink, deletePlace, sendAIMessage, type Place, type PlaceSummary } from '@/lib/api';
+import { usePlaces } from '@/hooks/usePlaces';
+import { useMap } from '@/hooks/useMap';
+import { useToast } from '@/hooks/useToast';
+import { matchesTypeFilter } from '@/utils/typeHierarchy';
+import { darkColor } from '@/constants/theme';
+
+const HEADER_WHITE_HEIGHT = 120;
+const BOTTOM_NAV_HEIGHT = 52;
+
+export default function HomeScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  
+  // Hooks personnalisés
+  const {
+    placesSummary,
+    selectedPlace,
+    placesListKey,
+    refreshing,
+    refreshPlaces,
+    loadPlaceDetails,
+    clearSelectedPlace,
+    setSelectedPlace,
+  } = usePlaces();
+  
+  const { region, loadingLocation, mapViewRef, animateToPlace } = useMap();
+  const { toast, showSuccess, showError, hideToast } = useToast();
+
+  // État local pour l'UI
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
+  const [isAddToCollectionModalVisible, setIsAddToCollectionModalVisible] = useState(false);
+  const [selectedPlaceForCollection, setSelectedPlaceForCollection] = useState<string | null>(null);
+  const [linkInput, setLinkInput] = useState('');
+  const [activeTab, setActiveTab] = useState('home');
+  
+  // Filtres
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+  
+  // Réinitialiser le type quand on change de catégorie
+  const handleCategoryChange = (category: string | null) => {
+    setSelectedCategory(category);
+    setSelectedType(null); // Réinitialiser le type
+  };
+
+  // Refs
+  const slidingCardRef = useRef<SlidingCardRef>(null);
+  const placeDetailsScrollViewRef = useRef<any>(null);
+  
+  // Shared value pour suivre la position de la carte coulissante
+  const cardTranslateY = useSharedValue(0);
+
+  /**
+   * Gère le clic sur un lieu (marqueur ou dans la liste)
+   */
+  const handlePlacePress = async (place: Place | PlaceSummary) => {
+    // Si c'est un PlaceSummary, charger les détails complets
+    if ('provider' in place && !('createdAt' in place)) {
+      try {
+        await loadPlaceDetails(place.id);
+      } catch (error) {
+        console.error('[Home] Erreur lors du chargement des détails:', error);
+        showError('Impossible de charger les détails du lieu.');
+        return;
+      }
+    } else {
+      // C'est une Place complète, utiliser directement
+      setSelectedPlace(place as Place);
+    }
+
+    // Animer la carte vers le lieu
+    await animateToPlace(place);
+
+    // Animer la carte coulissante vers 50% de visibilité
+    if (slidingCardRef.current) {
+      slidingCardRef.current.animateToSnapPoint(50);
+    }
+  };
+
+  /**
+   * Gère la sauvegarde d'un lien
+   */
+  const handleSaveLink = async (result: any) => {
+    console.log('Lien analysé avec succès:', result);
+    
+    // Vérifier si le lieu a bien été créé
+    if (!result.placeId) {
+      showError('Le lieu n\'a pas pu être ajouté. Les informations extraites ne correspondent pas aux données Google Places.');
+      return;
+    }
+    
+    // Note: La place est déjà liée à l'utilisateur automatiquement par /api/link-preview
+    // si l'utilisateur est connecté. Pas besoin d'appeler linkPlace().
+    
+    // Afficher un toast de succès
+    const placeName = result.llm?.placeName || result.place?.name || 'Lieu';
+    showSuccess(`${placeName} a été ajouté avec succès !`);
+
+    // Rafraîchir toutes les places
+    await refreshPlaces();
+  };
+
+  /**
+   * Gère les erreurs lors de l'analyse de lien
+   */
+  const handleLinkError = (error: Error) => {
+    showError(error.message || 'Une erreur est survenue lors de l\'analyse du lien.');
+  };
+
+  /**
+   * Supprime les liens entre les lieux et l'utilisateur
+   */
+  const handleDeletePlaces = async (placeIds: string[]) => {
+    try {
+      // Supprimer chaque lieu un par un
+      await Promise.all(placeIds.map(placeId => deletePlace(placeId)));
+      
+      // Afficher un message de succès
+      showSuccess(`${placeIds.length} lieu${placeIds.length > 1 ? 'x' : ''} supprimé${placeIds.length > 1 ? 's' : ''} avec succès`);
+      
+      // Rafraîchir la liste des lieux
+      await refreshPlaces();
+    } catch (error) {
+      console.error('[Home] Erreur lors de la suppression:', error);
+      showError('Une erreur est survenue lors de la suppression des lieux.');
+      throw error;
+    }
+  };
+
+  /**
+   * Mesure la hauteur totale du header (blanc + vert)
+   */
+  const handleHeaderContainerLayout = (event: LayoutChangeEvent) => {
+    const { height } = event.nativeEvent.layout;
+    setHeaderHeight(height);
+  };
+
+  /**
+   * Filtre les places selon les filtres sélectionnés
+   */
+  const filteredPlaces = React.useMemo(() => {
+    return placesSummary.filter((place) => {
+      // Filtre par catégorie
+      if (selectedCategory && place.category !== selectedCategory) {
+        return false;
+      }
+      
+      // Filtre par type (seulement si une catégorie est sélectionnée)
+      // Utilise la hiérarchie des types pour inclure les sous-types
+      if (selectedCategory && selectedType && !matchesTypeFilter(place.type, selectedType)) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [placesSummary, selectedCategory, selectedType]);
+
+  /**
+   * Style animé pour ajuster la hauteur de la carte en fonction de la position de la carte coulissante
+   */
+  const mapContainerAnimatedStyle = useAnimatedStyle(() => {
+    const mapHeight = HEADER_WHITE_HEIGHT + cardTranslateY.value;
+    return {
+      height: mapHeight,
+    };
+  });
+
+  return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={styles.container}>
+        {/* Header blanc + Filtres - seulement sur la page home */}
+        {activeTab === 'home' && (
+          <MapHeader
+            onLayout={handleHeaderContainerLayout}
+            onAddLinkPress={() => setIsLinkModalVisible(true)}
+            onAIPress={() => router.push('/ai')}
+            places={placesSummary}
+            selectedCategory={selectedCategory}
+            selectedType={selectedType}
+            onCategoryChange={handleCategoryChange}
+            onTypeChange={setSelectedType}
+          />
+        )}
+        
+        {/* Contenu selon l'onglet actif */}
+        {activeTab === 'home' && (
+          <>
+            {/* Carte */}
+            <Animated.View style={[styles.mapContainer, mapContainerAnimatedStyle]}>
+              {/* Popup upgrade superposée sur la map */}
+              <UpgradePopup />
+              
+              {loadingLocation && (
+                <View style={styles.mapLoading}>
+                  <ActivityIndicator size="large" color={darkColor} />
+                </View>
+              )}
+              
+              {!loadingLocation && region && (
+                <MapView
+                  ref={mapViewRef}
+                  style={StyleSheet.absoluteFillObject}
+                  initialRegion={region}
+                  showsUserLocation
+                >
+                  {/* Marqueurs pour les lieux sauvegardés */}
+                  {filteredPlaces
+                    .filter((place) => 
+                      place && 
+                      place.id && 
+                      place.lat != null && 
+                      place.lon != null
+                    )
+                    .map((place) => (
+                      <Marker
+                        key={place.id}
+                        coordinate={{
+                          latitude: place.lat!,
+                          longitude: place.lon!,
+                        }}
+                        title={place.placeName || place.rawTitle || 'Lieu'}
+                        description={place.googleFormattedAddress || place.address || undefined}
+                        onPress={() => handlePlacePress(place)}
+                      />
+                    ))}
+                </MapView>
+              )}
+              
+              {!loadingLocation && !region && (
+                <View style={styles.mapLoading}>
+                  <ActivityIndicator size="large" color={darkColor} />
+                </View>
+              )}
+            </Animated.View>
+
+            {/* Carte coulissante */}
+            {headerHeight > 0 && (
+              <SlidingCard
+                ref={slidingCardRef}
+                headerHeight={headerHeight}
+                headerWhiteHeight={HEADER_WHITE_HEIGHT}
+                bottomNavHeight={BOTTOM_NAV_HEIGHT + insets.bottom}
+                initialSnap="mid"
+                enableFling
+                grabber
+                testID="sliding-card"
+                onPositionChange={(translateY) => {
+                  cardTranslateY.value = translateY;
+                }}
+              >
+                <PlaceTransition
+                  selectedPlace={selectedPlace}
+                  placesSummary={filteredPlaces}
+                  placesListKey={placesListKey}
+                  onPlacePress={handlePlacePress}
+                  onBack={clearSelectedPlace}
+                  scrollViewRef={placeDetailsScrollViewRef}
+                  onRefreshPlaces={refreshPlaces}
+                  refreshingPlaces={refreshing}
+                  onRatingUpdated={refreshPlaces}
+                  onDeletePlaces={handleDeletePlaces}
+                  onAddToCollection={(placeId) => {
+                    setSelectedPlaceForCollection(placeId);
+                    setIsAddToCollectionModalVisible(true);
+                  }}
+                />
+              </SlidingCard>
+            )}
+          </>
+        )}
+
+        {activeTab === 'collections' && <CollectionsScreen activeTab={activeTab} onTabChange={setActiveTab} />}
+
+        {activeTab === 'plans' && <PlansScreen activeTab={activeTab} onTabChange={setActiveTab} />}
+
+        {activeTab === 'settings' && (
+          <View style={styles.tabContent}>
+            <Text style={styles.tabTitle}>Settings</Text>
+          </View>
+        )}
+
+        {/* Bottom Sheet pour ajouter un lien */}
+        <LinkBottomSheet
+          visible={isLinkModalVisible}
+          onClose={() => {
+            setIsLinkModalVisible(false);
+            setLinkInput('');
+          }}
+          linkInput={linkInput}
+          onLinkInputChange={setLinkInput}
+          onSaveLink={handleSaveLink}
+          onError={handleLinkError}
+        />
+
+
+        {/* Modal Ajouter à une collection */}
+        {selectedPlaceForCollection && (
+          <AddToCollectionModal
+            visible={isAddToCollectionModalVisible}
+            onClose={() => {
+              setIsAddToCollectionModalVisible(false);
+              setSelectedPlaceForCollection(null);
+            }}
+            placeId={selectedPlaceForCollection}
+            onSuccess={() => {
+              refreshPlaces();
+            }}
+          />
+        )}
+
+        {/* Toast pour les notifications */}
+        <Toast
+          visible={toast.visible}
+          message={toast.message}
+          type={toast.type}
+          onHide={hideToast}
+        />
+
+        {/* Barre de navigation en bas */}
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      </View>
+    </TouchableWithoutFeedback>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  mapContainer: {
+    position: 'relative',
+    width: '100%',
+  },
+  mapLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  tabTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: darkColor,
+  },
+});

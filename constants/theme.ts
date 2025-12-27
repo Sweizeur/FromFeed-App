@@ -8,6 +8,14 @@ import { Platform } from 'react-native';
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
+// Dark color to replace black throughout the app
+export const darkColor = '#04060A';
+
+// Helper function to create rgba with alpha from darkColor
+export const darkColorWithAlpha = (alpha: number): string => {
+  return `rgba(4, 6, 10, ${alpha})`;
+};
+
 export const Colors = {
   light: {
     text: '#11181C',
