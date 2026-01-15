@@ -3,6 +3,7 @@ import { TouchableOpacity, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import Animated from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { darkColor } from '@/constants/theme';
 
 interface AnimatedAIButtonProps {
@@ -121,8 +122,22 @@ export default function AnimatedAIButton({ onPress, size = 38 }: AnimatedAIButto
       <Animated.View style={[styles.borderContainer, borderAnimatedStyle]}>
         <Animated.View style={styles.dotsBorder} />
       </Animated.View>
-      <Animated.View style={[styles.background, buttonAnimatedStyle]} />
-      <Animated.View style={[styles.glow, glowAnimatedStyle]} />
+      <Animated.View style={[styles.backgroundContainer, buttonAnimatedStyle]}>
+        <LinearGradient
+          colors={['#C7366F', '#7C3AED', '#6D28D9']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.background}
+        />
+      </Animated.View>
+      <Animated.View style={[styles.glowContainer, glowAnimatedStyle]}>
+        <LinearGradient
+          colors={['#C7366F', '#7C3AED', '#6D28D9']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.glow}
+        />
+      </Animated.View>
       <View style={styles.sparkleContainer}>
         <Animated.View style={[styles.sparkleWrapper, sparkle1AnimatedStyle]}>
           <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
@@ -190,23 +205,31 @@ const styles = StyleSheet.create({
     opacity: 0.3,
     borderRadius: 4,
   },
-  background: {
+  backgroundContainer: {
     position: 'absolute',
     width: '100%',
     height: '100%',
-    backgroundColor: darkColor,
     borderRadius: 9999,
-    shadowColor: darkColor,
+    shadowColor: '#6D28D9',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
   },
-  glow: {
+  background: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 9999,
+  },
+  glowContainer: {
     position: 'absolute',
     width: '100%',
     height: '100%',
-    backgroundColor: darkColor,
+    borderRadius: 9999,
+  },
+  glow: {
+    width: '100%',
+    height: '100%',
     borderRadius: 9999,
     opacity: 0.75,
   },
@@ -224,3 +247,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
+

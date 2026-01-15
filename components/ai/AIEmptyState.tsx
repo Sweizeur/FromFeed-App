@@ -33,9 +33,9 @@ export default function AIEmptyState({
   return (
     <View style={styles.emptyStateContainer}>
       <View style={styles.headerTextContainer}>
-        <Text style={styles.emptyStateTitle}>Demandez. Créez. Explorez.</Text>
+        <Text style={styles.emptyStateTitle}>Organisez. Découvrez. Planifiez.</Text>
         <Text style={styles.emptyStateSubtitle}>
-          Créez des plans personnalisés simplement en décrivant ce que vous voulez
+          Organisez vos journées, trouvez des restaurants, notez vos lieux préférés et créez des plannings personnalisés en quelques mots
         </Text>
       </View>
 

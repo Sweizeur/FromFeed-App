@@ -37,10 +37,31 @@ async function apiRequest<T>(
 
   console.log('[API] Requête vers:', `${BACKEND_URL}${endpoint}`, 'Method:', options.method || 'GET');
   
-  const response = await fetch(`${BACKEND_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  // Ajouter les headers ngrok si nécessaire
+  if (BACKEND_URL.includes('ngrok')) {
+    headers['ngrok-skip-browser-warning'] = 'true';
+  }
+  
+  // Créer un AbortController pour gérer le timeout (compatible React Native)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 secondes
+  
+  let response: Response;
+  try {
+    response = await fetch(`${BACKEND_URL}${endpoint}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout: Le serveur n\'a pas répondu dans les temps');
+    }
+    throw error;
+  }
+  
+  clearTimeout(timeoutId);
 
   console.log('[API] Réponse status:', response.status, 'ok:', response.ok);
 
@@ -96,9 +117,11 @@ export async function linkPlace(placeId: string): Promise<{ success: boolean; me
  * - Les marqueurs sur la carte
  * - La liste complète dans la card
  * Les détails complets sont chargés via getPlaceDetails() quand nécessaire
+ * @param skipCache Si true, force le bypass du cache Redis (pour reload manuel)
  */
-export async function getAllPlacesSummary(): Promise<PlacesSummaryResponse> {
-  return apiRequest<PlacesSummaryResponse>('/api/places/markers', {
+export async function getAllPlacesSummary(skipCache: boolean = false): Promise<PlacesSummaryResponse> {
+  const url = skipCache ? '/api/places/markers?skipCache=true' : '/api/places/markers';
+  return apiRequest<PlacesSummaryResponse>(url, {
     method: 'GET',
   });
 }
@@ -201,7 +224,214 @@ export async function deletePlace(placeId: string): Promise<{ message: string }>
 }
 
 /**
- * Envoie un message à l'assistant IA
+ * Envoie un message à l'assistant IA avec streaming
+ * @param prompt Message de l'utilisateur
+ * @param conversationId ID de la conversation (optionnel, pour continuer une conversation existante)
+ * @param onChunk Callback appelé à chaque chunk reçu
+ * @param onComplete Callback appelé quand la réponse est complète
+ * @param onError Callback appelé en cas d'erreur
+ */
+// Variable pour empêcher les appels simultanés et gérer la connexion WebSocket
+let isStreamingActive = false;
+let currentWebSocket: WebSocket | null = null;
+
+export async function sendAIMessageStreaming(
+  prompt: string,
+  conversationId: string | undefined,
+  onChunk: (chunk: string) => void,
+  onComplete: (fullResponse: string, conversationId: string) => void,
+  onError: (error: Error) => void
+): Promise<void> {
+  // Empêcher les appels simultanés
+  if (isStreamingActive) {
+    console.warn('[API] Un stream est déjà actif, annulation de la nouvelle requête');
+    onError(new Error('Un stream est déjà en cours'));
+    return;
+  }
+
+  const token = await getStoredToken();
+  if (!token) {
+    onError(new Error('Token d\'authentification manquant'));
+    return;
+  }
+
+  const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+  
+  // Convertir l'URL HTTP/HTTPS en WebSocket (WS/WSS)
+  let wsUrl: string;
+  if (BACKEND_URL.startsWith('https://')) {
+    wsUrl = BACKEND_URL.replace('https://', 'wss://') + '/api/ai/chat/ws?token=' + encodeURIComponent(token);
+  } else if (BACKEND_URL.startsWith('http://')) {
+    wsUrl = BACKEND_URL.replace('http://', 'ws://') + '/api/ai/chat/ws?token=' + encodeURIComponent(token);
+  } else {
+    // Fallback pour les URLs sans schéma
+    wsUrl = `wss://${BACKEND_URL}/api/ai/chat/ws?token=${encodeURIComponent(token)}`;
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      isStreamingActive = true;
+      console.log('[API] Connexion WebSocket:', wsUrl.replace(token, 'TOKEN_HIDDEN'));
+
+      // Fermer la connexion précédente si elle existe
+      if (currentWebSocket) {
+        currentWebSocket.close();
+      }
+
+      const ws = new WebSocket(wsUrl);
+      currentWebSocket = ws;
+
+      let fullResponse = '';
+      let isComplete = false;
+      let resolved = false;
+
+      const cleanup = () => {
+        isStreamingActive = false;
+        if (currentWebSocket === ws) {
+          currentWebSocket = null;
+        }
+        if (!resolved) {
+          resolved = true;
+        }
+      };
+
+      ws.onopen = () => {
+        console.log('[API] WebSocket connecté, en attente du message de bienvenue...');
+        // Ne pas envoyer le message immédiatement, attendre le message "connected"
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          // Vérifier que les données existent et sont de type string
+          if (!event.data || typeof event.data !== 'string') {
+            console.warn('[API] Message WebSocket avec type invalide:', typeof event.data);
+            return;
+          }
+
+          // Limiter la taille pour éviter les attaques DoS
+          if (event.data.length > 100000) {
+            console.error('[API] Message WebSocket trop volumineux:', event.data.length);
+            cleanup();
+            onError(new Error('Message trop volumineux'));
+            ws.close();
+            reject(new Error('Message trop volumineux'));
+            return;
+          }
+
+          // Parser JSON avec gestion d'erreur
+          let data: any;
+          try {
+            data = JSON.parse(event.data);
+          } catch (parseError) {
+            console.error('[API] Erreur de parsing JSON:', parseError, 'Data:', event.data.substring(0, 100));
+            if (!isComplete) {
+              cleanup();
+              onError(new Error('Format JSON invalide reçu du serveur'));
+              ws.close();
+              reject(parseError);
+            }
+            return;
+          }
+
+          // Valider la structure de base
+          if (!data || typeof data !== 'object' || !data.type) {
+            console.warn('[API] Message WebSocket sans type:', data);
+            return;
+          }
+
+          if (data.type === 'connected') {
+            console.log('[API] WebSocket:', data.message);
+            // Maintenant que le serveur est prêt, envoyer le message de chat
+            console.log('[API] Envoi du message de chat au serveur...');
+            ws.send(JSON.stringify({
+              type: 'chat',
+              prompt,
+              conversationId,
+            }));
+            return;
+          }
+
+          if (data.type === 'chunk') {
+            // Valider que content existe et est une string
+            if (typeof data.content === 'string') {
+              fullResponse += data.content;
+              onChunk(data.content);
+            } else {
+              console.warn('[API] Chunk sans contenu valide:', data);
+            }
+          } else if (data.type === 'complete') {
+            isComplete = true;
+            cleanup();
+            const finalResponse = typeof data.response === 'string' ? data.response : fullResponse;
+            const finalConversationId = typeof data.conversationId === 'string' ? data.conversationId : conversationId || '';
+            onComplete(finalResponse, finalConversationId);
+            ws.close();
+            resolve();
+          } else if (data.type === 'error') {
+            cleanup();
+            const errorMessage = typeof data.error === 'string' ? data.error : 'Erreur inconnue';
+            onError(new Error(errorMessage));
+            ws.close();
+            reject(new Error(errorMessage));
+          } else {
+            console.warn('[API] Type de message WebSocket inconnu:', data.type);
+          }
+        } catch (e) {
+          console.error('[API] Erreur lors du traitement du message WebSocket:', e);
+          if (!isComplete) {
+            cleanup();
+            onError(new Error('Erreur lors du traitement de la réponse'));
+            ws.close();
+            reject(e);
+          }
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('[API] Erreur WebSocket:', error);
+        if (!isComplete && !resolved) {
+          cleanup();
+          onError(new Error('Erreur de connexion WebSocket'));
+          reject(error);
+        }
+      };
+
+      ws.onclose = (event) => {
+        console.log('[API] WebSocket fermé, code:', event.code, 'reason:', event.reason);
+        cleanup();
+        
+        if (!isComplete && !resolved) {
+          if (event.code === 1008) {
+            // Unauthorized
+            onError(new Error('Authentification échouée'));
+          } else if (event.code !== 1000) {
+            // Fermeture anormale
+            onError(new Error('Connexion WebSocket fermée de manière inattendue'));
+          }
+          reject(new Error('Connexion fermée'));
+        }
+      };
+
+      // Timeout de sécurité (5 minutes)
+      setTimeout(() => {
+        if (!isComplete && !resolved) {
+          cleanup();
+          ws.close();
+          onError(new Error('Timeout: la réponse prend trop de temps'));
+          reject(new Error('Timeout'));
+        }
+      }, 5 * 60 * 1000);
+    } catch (error) {
+      isStreamingActive = false;
+      currentWebSocket = null;
+      onError(error instanceof Error ? error : new Error('Erreur lors de l\'initialisation WebSocket'));
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Envoie un message à l'assistant IA (mode classique, sans streaming)
  * @param prompt Message de l'utilisateur
  * @param conversationId ID de la conversation (optionnel, pour continuer une conversation existante)
  */

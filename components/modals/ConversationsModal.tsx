@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Modal,
   FlatList,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +14,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getConversations, deleteConversation } from '@/lib/api';
 import { darkColor, darkColorWithAlpha } from '@/constants/theme';
 
@@ -35,6 +35,8 @@ interface ConversationsModalProps {
   onRefresh?: () => void; // Callback pour rafraîchir la liste
 }
 
+const CONVERSATIONS_CACHE_KEY = '@fromfeed:conversations_cache';
+
 export default function ConversationsModal({
   visible,
   onClose,
@@ -45,63 +47,110 @@ export default function ConversationsModal({
 }: ConversationsModalProps) {
   const insets = useSafeAreaInsets();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(300);
 
-  // Charger les conversations au montage et rafraîchir quand le modal s'ouvre
+  // Charger le cache au montage (immédiatement, sans attendre)
+  useEffect(() => {
+    loadCachedConversations();
+  }, []);
+
+  // Charger les conversations quand le modal s'ouvre
   useEffect(() => {
     if (visible) {
       opacity.value = withTiming(1, { duration: 300 });
       translateY.value = withTiming(0, { duration: 300 });
-      // Rafraîchir la liste quand le modal s'ouvre pour avoir les titres à jour
-      loadConversations(true);
+      
+      // 1. Charger le cache immédiatement (affichage instantané, pas de loader)
+      loadCachedConversations();
+      
+      // 2. Rafraîchir en arrière-plan sans loader visible
+      // La mise à jour se fera silencieusement quand la réponse arrive
+      loadConversationsInBackground();
     } else {
       opacity.value = withTiming(0, { duration: 300 });
       translateY.value = withTiming(300, { duration: 300 });
     }
   }, [visible]);
 
-  const loadConversations = async (forceRefresh = false) => {
-    // Ne pas recharger si on a déjà des conversations et qu'on ne force pas le refresh
-    if (!forceRefresh && conversations.length > 0) {
-      return;
+  // Charger les conversations depuis le cache (affichage immédiat, pas de loader)
+  const loadCachedConversations = async () => {
+    try {
+      const cachedData = await AsyncStorage.getItem(CONVERSATIONS_CACHE_KEY);
+      if (cachedData) {
+        const cachedConversations = JSON.parse(cachedData);
+        // Mettre à jour immédiatement avec le cache (affichage instantané)
+        setConversations(cachedConversations);
+      }
+      // Si pas de cache, conversations reste vide (affichage "Aucune conversation")
+      // La requête en arrière-plan va mettre à jour quand elle arrive
+    } catch (error) {
+      console.error('[ConversationsModal] Erreur lors du chargement du cache:', error);
     }
-    
-    setLoading(true);
+  };
+
+  // Charger les conversations depuis l'API en arrière-plan (sans loader visible)
+  // Cette fonction met à jour silencieusement les conversations quand la réponse arrive
+  const loadConversationsInBackground = async () => {
     try {
       const result = await getConversations();
       if (result.success) {
+        // Mettre à jour l'affichage avec les nouvelles données (mise à jour silencieuse)
         setConversations(result.conversations);
+        // Sauvegarder dans le cache pour la prochaine fois
+        await AsyncStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(result.conversations));
       }
     } catch (error) {
       console.error('[ConversationsModal] Erreur lors du chargement:', error);
-    } finally {
-      setLoading(false);
+      // En cas d'erreur, on garde le cache affiché (pas de message d'erreur visible)
     }
   };
 
   const handleDelete = async (conversationId: string, event: any) => {
     event.stopPropagation();
-    setDeletingId(conversationId);
+    
+    // Sauvegarder la conversation supprimée pour pouvoir la restaurer en cas d'erreur
+    const conversationToDelete = conversations.find((c) => c.id === conversationId);
+    if (!conversationToDelete) return;
+
+    // 1. Supprimer immédiatement de l'UI (optimistic update)
+    const updatedConversations = conversations.filter((c) => c.id !== conversationId);
+    setConversations(updatedConversations);
+    
+    // Mettre à jour le cache immédiatement
+    await AsyncStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(updatedConversations));
+    
+    // Si la conversation supprimée est la conversation actuelle, réinitialiser
+    if (currentConversationId === conversationId && onCurrentConversationDeleted) {
+      onCurrentConversationDeleted();
+    }
+
+    // 2. Faire la requête API en arrière-plan
     try {
       await deleteConversation(conversationId);
-      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
       
-      // Si la conversation supprimée est la conversation actuelle, réinitialiser
-      if (currentConversationId === conversationId && onCurrentConversationDeleted) {
-        onCurrentConversationDeleted();
-      }
-      
+      // Succès : la conversation est déjà supprimée de l'UI
       // Notifier le parent pour rafraîchir si nécessaire
       if (onRefresh) {
         onRefresh();
       }
     } catch (error) {
       console.error('[ConversationsModal] Erreur lors de la suppression:', error);
-    } finally {
-      setDeletingId(null);
+      
+      // 3. Si l'API échoue, restaurer la conversation dans l'UI
+      const restoredConversations = [...updatedConversations, conversationToDelete];
+      // Trier par updatedAt décroissant pour garder l'ordre (comme la DB)
+      restoredConversations.sort((a, b) => 
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+      
+      setConversations(restoredConversations);
+      
+      // Restaurer le cache
+      await AsyncStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(restoredConversations));
+      
+      // Optionnel : Afficher un message d'erreur à l'utilisateur
+      // Vous pouvez ajouter un toast/alert ici si nécessaire
     }
   };
 
@@ -188,11 +237,7 @@ export default function ConversationsModal({
           </View>
 
           {/* Content */}
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={darkColor} />
-            </View>
-          ) : conversations.length === 0 ? (
+          {conversations.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="chatbubbles-outline" size={48} color="#CCC" />
               <Text style={styles.emptyText}>Aucune conversation</Text>
@@ -217,11 +262,7 @@ export default function ConversationsModal({
                         style={styles.deleteButton}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
-                        {deletingId === item.id ? (
-                          <ActivityIndicator size="small" color="#999" />
-                        ) : (
-                          <Ionicons name="trash-outline" size={18} color="#999" />
-                        )}
+                        <Ionicons name="trash-outline" size={18} color="#999" />
                       </TouchableOpacity>
                     </View>
                     <View style={styles.conversationFooter}>
@@ -257,7 +298,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '80%',
+    height: '75%',
     shadowColor: darkColor,
     shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: -4 },
@@ -287,12 +328,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
   },
   emptyContainer: {
     flex: 1,

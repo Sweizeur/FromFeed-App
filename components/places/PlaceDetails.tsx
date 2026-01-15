@@ -152,6 +152,12 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
         {/* Nom et note */}
         <View style={styles.titleSection}>
           <Text style={styles.name}>{displayName}</Text>
+          {/* Sous-catégorie (type) */}
+          {place.type && (
+            <View style={styles.typeContainer}>
+              <Text style={styles.typeText}>{place.type}</Text>
+            </View>
+          )}
           {rating && (
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={18} color="#FFD700" />
@@ -369,6 +375,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: darkColor,
     marginBottom: 8,
+  },
+  typeContainer: {
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  typeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: darkColor,
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   ratingContainer: {
     flexDirection: 'row',

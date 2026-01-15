@@ -354,24 +354,64 @@ export async function refreshSession(): Promise<AuthSessionData | null> {
     return null;
   }
 
-  const response = await fetch(`${BACKEND_URL}/api/auth/mobile/refresh-session`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
+  try {
+    console.log('[Auth] Rafraîchissement de la session, URL:', `${BACKEND_URL}/api/auth/mobile/refresh-session`);
+    
+    // Créer un AbortController pour gérer le timeout (compatible React Native)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 secondes
+    
+    let response: Response;
+    try {
+      response = await fetch(`${BACKEND_URL}/api/auth/mobile/refresh-session`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          // Headers pour ngrok (si nécessaire)
+          ...(BACKEND_URL.includes('ngrok') ? {
+            'ngrok-skip-browser-warning': 'true',
+          } : {}),
+        },
+        signal: controller.signal,
+      });
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout: Le serveur n\'a pas répondu dans les temps');
+      }
+      throw error;
+    }
+    
+    clearTimeout(timeoutId);
 
-  if (!response.ok) {
-    // Session expirée ou invalide
+    if (!response.ok) {
+      console.warn('[Auth] Session refresh failed, status:', response.status);
+      // Session expirée ou invalide
+      await clearToken();
+      return null;
+    }
+
+    const authSession: AuthSessionData = await response.json();
+    await storeToken(authSession.token);
+    await storeUser(authSession.user);
+
+    return authSession;
+  } catch (error) {
+    // Gérer les erreurs réseau de manière plus gracieuse
+    if (error instanceof TypeError && error.message === 'Network request failed') {
+      console.error('[Auth] Erreur réseau lors du rafraîchissement de la session:', error);
+      console.error('[Auth] Backend URL:', BACKEND_URL);
+      console.error('[Auth] Vérifiez que le backend est accessible et que ngrok est actif');
+      // Ne pas effacer le token en cas d'erreur réseau (l'utilisateur pourrait être hors ligne)
+      // Retourner null pour indiquer que la session n'a pas pu être rafraîchie
+      return null;
+    }
+    
+    console.error('[Auth] Erreur lors du rafraîchissement de la session:', error);
     await clearToken();
     return null;
   }
-
-  const authSession: AuthSessionData = await response.json();
-  await storeToken(authSession.token);
-  await storeUser(authSession.user);
-
-  return authSession;
 }
 
 /**

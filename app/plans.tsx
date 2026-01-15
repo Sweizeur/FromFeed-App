@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import BottomNav from '@/components/navigation/BottomNav';
 import PlanForm from '@/components/plans/PlanForm';
 import TimelineRow from '@/components/plans/TimelineRow';
+import EventCard from '@/components/plans/EventCard';
 import { getPlans, type Plan, type PlanActivity } from '@/lib/api';
 import { darkColor } from '@/constants/theme';
+
+const PLANS_CACHE_KEY = '@fromfeed:plans_cache';
 
 interface PlansScreenProps {
   activeTab?: string;
@@ -28,7 +32,6 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
   );
   
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
@@ -39,23 +42,44 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
   const [isAnimating, setIsAnimating] = useState(false);
   const calendarHeight = useSharedValue(340);
 
-  // Charger les plans
-  const loadPlans = async () => {
+  // Charger les plans depuis le cache au montage
+  useEffect(() => {
+    loadCachedPlans();
+  }, []);
+
+  // Charger les plans depuis le cache
+  const loadCachedPlans = async () => {
     try {
-      setLoading(true);
+      const cachedData = await AsyncStorage.getItem(PLANS_CACHE_KEY);
+      if (cachedData) {
+        const cachedPlans = JSON.parse(cachedData);
+        setPlans(cachedPlans);
+      }
+    } catch (error) {
+      console.error('[PlansScreen] Erreur lors du chargement du cache:', error);
+    }
+    // Charger en arrière-plan après avoir affiché le cache
+    loadPlansInBackground();
+  };
+
+  // Charger les plans depuis l'API en arrière-plan (sans loader)
+  const loadPlansInBackground = async () => {
+    try {
       const response = await getPlans();
-      setPlans(response.plans || []);
+      const plansData = response.plans || [];
+      // Mettre à jour immédiatement l'affichage
+      setPlans(plansData);
+      // Sauvegarder dans le cache
+      await AsyncStorage.setItem(PLANS_CACHE_KEY, JSON.stringify(plansData));
     } catch (error) {
       console.error('[PlansScreen] Erreur lors du chargement des plans:', error);
-      setPlans([]);
-    } finally {
-      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadPlans();
-  }, []);
+  // Fonction pour recharger les plans (utilisée après sauvegarde)
+  const loadPlans = async () => {
+    await loadPlansInBackground();
+  };
 
   // Générer les heures de la journée (00:00 à 23:00)
   const hours = Array.from({ length: 24 }, (_, i) => {
@@ -73,26 +97,236 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
   }, [selectedDate, plans]);
 
   // Séparer les activités avec heure et sans heure
+  // Calculer la durée et les heures couvertes par chaque activité
   const activitiesWithTime: PlanActivity[] = [];
   const activitiesWithoutTime: PlanActivity[] = [];
   const activitiesByHour: Record<string, PlanActivity[]> = {};
+  
+  // Fonction pour calculer la durée en heures
+  const calculateDurationInHours = (startTime: string, endTime: string | null | undefined): number => {
+    if (!endTime) return 1; // Par défaut 1 heure si pas d'heure de fin
+    
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    const durationMinutes = endMinutes - startMinutes;
+    // Arrondir à l'heure supérieure pour l'affichage
+    return Math.max(1, Math.ceil(durationMinutes / 60));
+  };
+  
+  // Fonction pour obtenir toutes les heures couvertes par une activité
+  const getHoursForActivity = (activity: PlanActivity): string[] => {
+    if (!activity.startTime || activity.startTime.trim() === '') return [];
+    
+    const startHour = parseInt(activity.startTime.split(':')[0]);
+    const duration = calculateDurationInHours(activity.startTime, activity.endTime || null);
+    const hours: string[] = [];
+    
+    for (let i = 0; i < duration; i++) {
+      const hour = (startHour + i) % 24;
+      hours.push(`${hour.toString().padStart(2, '0')}:00`);
+    }
+    
+    return hours;
+  };
   
   if (selectedPlan) {
     selectedPlan.activities.forEach((activity) => {
       if (activity.startTime && activity.startTime.trim() !== '') {
         // Activité avec heure
         activitiesWithTime.push(activity);
-        const hour = activity.startTime.split(':')[0] + ':00';
+        // Ajouter l'activité à toutes les heures qu'elle couvre
+        const hours = getHoursForActivity(activity);
+        hours.forEach((hour) => {
         if (!activitiesByHour[hour]) {
           activitiesByHour[hour] = [];
         }
+          // Ne pas dupliquer l'activité si elle est déjà dans cette heure
+          if (!activitiesByHour[hour].find(a => a.id === activity.id)) {
         activitiesByHour[hour].push(activity);
+          }
+        });
       } else {
         // Activité sans heure (toute la journée)
         activitiesWithoutTime.push(activity);
       }
     });
   }
+
+  // Fonction pour calculer les positions des événements avec superposition
+  const calculateEventPositions = () => {
+    interface EventPosition {
+      activity: PlanActivity;
+      top: number;
+      height: number;
+      bottom: number;
+      left: number;
+      width: number;
+      zIndex: number;
+      stackIndex: number;
+      isDot?: boolean; // Si true, afficher un point au lieu de l'événement complet
+      dotGroup?: PlanActivity[]; // Les activités du groupe pour le point
+    }
+
+    const eventPositions: EventPosition[] = [];
+    const LEFT_OFFSET = 72; // 60px (timeColumn) + 12px (paddingLeft)
+    const RIGHT_OFFSET = 16;
+    const SCREEN_WIDTH = Dimensions.get('window').width;
+    const PADDING_HORIZONTAL = 16; // paddingHorizontal du timelineContainer
+    const AVAILABLE_WIDTH = SCREEN_WIDTH - LEFT_OFFSET - RIGHT_OFFSET - PADDING_HORIZONTAL;
+
+    // Calculer les positions de base pour chaque événement
+    activitiesWithTime.forEach((activity) => {
+      if (!activity.startTime) return;
+
+      const startHour = parseInt(activity.startTime.split(':')[0]);
+      const startMin = parseInt(activity.startTime.split(':')[1] || '0');
+      
+      // Calculer la durée réelle en heures
+      let durationInHours = 1;
+      if (activity.endTime) {
+        const [startHourNum, startMinNum] = activity.startTime.split(':').map(Number);
+        const [endHourNum, endMinNum] = activity.endTime.split(':').map(Number);
+        const startMinutes = startHourNum * 60 + startMinNum;
+        const endMinutes = endHourNum * 60 + endMinNum;
+        const durationMinutes = endMinutes - startMinutes;
+        durationInHours = durationMinutes / 60;
+      }
+      
+      const top = (startHour * 68) + (startMin / 60) * 68;
+      const calculatedHeight = durationInHours * 68 - 8;
+      const height = Math.max(80, calculatedHeight);
+      const bottom = top + height;
+
+      eventPositions.push({
+        activity,
+        top,
+        height,
+        bottom,
+        left: LEFT_OFFSET,
+        width: AVAILABLE_WIDTH,
+        zIndex: 10, // Valeur par défaut
+        stackIndex: 0, // Sera calculé plus tard
+      });
+    });
+
+    // Trier par heure de début (les plus tôt en premier)
+    eventPositions.sort((a, b) => a.top - b.top);
+
+    // Fonction pour vérifier si deux événements se chevauchent
+    const eventsOverlap = (event1: EventPosition, event2: EventPosition): boolean => {
+      return !(event1.bottom <= event2.top || event1.top >= event2.bottom);
+    };
+
+    // Fonction pour calculer la différence en minutes entre deux heures de début
+    const getStartTimeDifferenceMinutes = (event1: EventPosition, event2: EventPosition): number => {
+      const time1 = event1.activity.startTime;
+      const time2 = event2.activity.startTime;
+      if (!time1 || !time2) return Infinity;
+      
+      const [hour1, min1] = time1.split(':').map(Number);
+      const [hour2, min2] = time2.split(':').map(Number);
+      const minutes1 = hour1 * 60 + min1;
+      const minutes2 = hour2 * 60 + min2;
+      
+      return Math.abs(minutes1 - minutes2);
+    };
+
+    // Fonction pour vérifier si deux événements commencent à moins de 30 minutes d'écart
+    const startsWithin30Minutes = (event1: EventPosition, event2: EventPosition): boolean => {
+      return getStartTimeDifferenceMinutes(event1, event2) <= 30;
+    };
+
+    // Créer des groupes d'événements qui commencent à moins de 30 minutes d'écart
+    const sideBySideGroups: EventPosition[][] = [];
+    const processedEvents = new Set<PlanActivity['id']>();
+
+    eventPositions.forEach((currentEvent) => {
+      if (processedEvents.has(currentEvent.activity.id)) return;
+
+      // Trouver tous les événements qui commencent à moins de 30 minutes de celui-ci
+      const nearbyEvents = [currentEvent];
+      eventPositions.forEach((otherEvent) => {
+        if (
+          otherEvent.activity.id !== currentEvent.activity.id &&
+          !processedEvents.has(otherEvent.activity.id) &&
+          startsWithin30Minutes(currentEvent, otherEvent)
+        ) {
+          nearbyEvents.push(otherEvent);
+        }
+      });
+
+      // Trier les événements du groupe par heure de début
+      nearbyEvents.sort((a, b) => a.top - b.top);
+      
+      // Marquer tous les événements du groupe comme traités
+      nearbyEvents.forEach(e => processedEvents.add(e.activity.id));
+      
+      if (nearbyEvents.length > 1) {
+        sideBySideGroups.push(nearbyEvents);
+      }
+    });
+
+    // Pour chaque événement, calculer sa position
+    eventPositions.forEach((currentEvent, currentIndex) => {
+      // Vérifier si cet événement fait partie d'un groupe côte à côte
+      const sideBySideGroup = sideBySideGroups.find(group => 
+        group.some(e => e.activity.id === currentEvent.activity.id)
+      );
+
+      if (sideBySideGroup) {
+        if (sideBySideGroup.length >= 3) {
+          // Pour 3+ événements, afficher des rectangles arrondis côte à côte
+          // La largeur sera calculée dans le rendu pour prendre toute la largeur disponible
+          currentEvent.isDot = true;
+          currentEvent.dotGroup = sideBySideGroup.map(e => e.activity);
+          currentEvent.left = LEFT_OFFSET;
+          currentEvent.width = AVAILABLE_WIDTH; // Sera utilisé pour le conteneur
+          currentEvent.height = 20; // Hauteur du rectangle arrondi
+          currentEvent.stackIndex = 0;
+        } else {
+          // Pour 2 événements, les placer côte à côte
+          const groupIndex = sideBySideGroup.findIndex(e => e.activity.id === currentEvent.activity.id);
+          const groupSize = sideBySideGroup.length;
+          const gap = 2; // Petit espace entre les événements
+          const eventWidth = (AVAILABLE_WIDTH - (gap * (groupSize - 1))) / groupSize;
+          
+          currentEvent.left = LEFT_OFFSET + (groupIndex * (eventWidth + gap));
+          currentEvent.width = eventWidth;
+          currentEvent.stackIndex = 0; // Pas de superposition pour les événements côte à côte
+        }
+      } else {
+        // Comportement normal : superposition pour les événements qui se chevauchent
+        const overlappingPrevious = eventPositions
+          .slice(0, currentIndex)
+          .filter(e => {
+            // Ne pas considérer les événements du même groupe côte à côte
+            const eGroup = sideBySideGroups.find(group => 
+              group.some(ev => ev.activity.id === e.activity.id)
+            );
+            return !eGroup && eventsOverlap(currentEvent, e);
+          });
+        
+        if (overlappingPrevious.length > 0) {
+          const maxStackIndex = Math.max(...overlappingPrevious.map(e => e.stackIndex));
+          currentEvent.stackIndex = maxStackIndex + 1;
+        } else {
+          currentEvent.stackIndex = 0;
+        }
+        
+        currentEvent.left = LEFT_OFFSET;
+        currentEvent.width = AVAILABLE_WIDTH;
+      }
+      
+      // Les événements plus récents (plus tard) ont un z-index plus élevé pour être au-dessus
+      currentEvent.zIndex = 10 + currentIndex;
+    });
+
+    return eventPositions;
+  };
 
   // Scroller automatiquement vers le premier événement (avec heure uniquement)
   useEffect(() => {
@@ -323,11 +557,7 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
           )}
         </View>
           
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={darkColor} />
-            </View>
-          ) : selectedPlan && selectedPlan.activities.length > 0 ? (
+          {selectedPlan && selectedPlan.activities.length > 0 ? (
           <>
             {/* Événements sans heure */}
             {activitiesWithoutTime.length > 0 && (
@@ -362,7 +592,7 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
               <ScrollView 
                 ref={scrollViewRef}
                 style={[styles.timelineScroll, { height: scrollViewHeight }]} 
-                contentContainerStyle={styles.timelineScrollContent}
+                contentContainerStyle={[styles.timelineScrollContent, { position: 'relative' }]}
                 showsVerticalScrollIndicator={true}
                 bounces={true}
                 scrollEnabled={true}
@@ -379,6 +609,122 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
                     />
                 );
               })}
+                {/* Événements positionnés de manière absolue */}
+                {(() => {
+                  const eventPositions = calculateEventPositions();
+                  const LEFT_OFFSET = 72; // 60px (timeColumn) + 12px (paddingLeft)
+                  const dotGroups = new Map<string, typeof eventPositions[0][]>();
+                  
+                  // Regrouper les événements qui font partie d'un groupe de points
+                  eventPositions.forEach((eventPos) => {
+                    if (eventPos.isDot && eventPos.dotGroup) {
+                      const groupKey = eventPos.dotGroup.map(a => a.id).sort().join('-');
+                      if (!dotGroups.has(groupKey)) {
+                        dotGroups.set(groupKey, []);
+                      }
+                      dotGroups.get(groupKey)!.push(eventPos);
+                    }
+                  });
+                  
+                  const renderedGroups = new Set<string>();
+                  
+                  return eventPositions.map((eventPos) => {
+                    // Si c'est un rectangle arrondi (groupe de 3+ événements)
+                    if (eventPos.isDot && eventPos.dotGroup) {
+                      const groupKey = eventPos.dotGroup.map(a => a.id).sort().join('-');
+                      
+                      // Ne rendre qu'une fois par groupe (avec tous les rectangles)
+                      if (!renderedGroups.has(groupKey)) {
+                        renderedGroups.add(groupKey);
+                        const groupEvents = dotGroups.get(groupKey) || [];
+                        
+                        // Calculer la largeur de chaque rectangle pour prendre toute la largeur disponible
+                        const SCREEN_WIDTH = Dimensions.get('window').width;
+                        const PADDING_HORIZONTAL = 16;
+                        const AVAILABLE_WIDTH = SCREEN_WIDTH - LEFT_OFFSET - 16 - PADDING_HORIZONTAL;
+                        const gap = 2; // Espace entre les rectangles
+                        const rectangleWidth = (AVAILABLE_WIDTH - (gap * (groupEvents.length - 1))) / groupEvents.length;
+                        
+                        return groupEvents.map((dotEvent, index) => {
+                          // Calculer la position top et la hauteur pour chaque événement
+                          const eventStartHour = parseInt(dotEvent.activity.startTime?.split(':')[0] || '0');
+                          const eventStartMin = parseInt(dotEvent.activity.startTime?.split(':')[1] || '0');
+                          
+                          // Calculer la durée réelle en heures
+                          let durationInHours = 1;
+                          if (dotEvent.activity.endTime) {
+                            const [startHourNum, startMinNum] = (dotEvent.activity.startTime || '0:0').split(':').map(Number);
+                            const [endHourNum, endMinNum] = dotEvent.activity.endTime.split(':').map(Number);
+                            const startMinutes = startHourNum * 60 + startMinNum;
+                            const endMinutes = endHourNum * 60 + endMinNum;
+                            const durationMinutes = endMinutes - startMinutes;
+                            durationInHours = durationMinutes / 60;
+                          }
+                          
+                          const eventTop = (eventStartHour * 68) + (eventStartMin / 60) * 68;
+                          const calculatedHeight = durationInHours * 68 - 8;
+                          const eventHeight = Math.max(20, calculatedHeight); // Minimum 20px
+                          
+                          return (
+                            <TouchableOpacity
+                              key={`dot-${dotEvent.activity.id}`}
+                              style={[
+                                styles.dotRectangleContainer,
+                                {
+                                  top: eventTop,
+                                  left: LEFT_OFFSET + (index * (rectangleWidth + gap)),
+                                  width: rectangleWidth,
+                                  height: eventHeight,
+                                  zIndex: eventPos.zIndex,
+                                },
+                              ]}
+                              onPress={() => {
+                                // Ouvrir le formulaire pour éditer le plan
+                                if (selectedPlan) {
+                                  setEditingPlan(selectedPlan);
+                                  setIsFormVisible(true);
+                                }
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text 
+                                style={styles.dotRectangleText}
+                                numberOfLines={Math.floor(eventHeight / 12)} // Ajuster le nombre de lignes selon la hauteur
+                                ellipsizeMode="tail"
+                              >
+                                {dotEvent.activity.place?.placeName || dotEvent.activity.place?.rawTitle || 'Lieu sans nom'}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        });
+                      }
+                      return null;
+                    }
+                  
+                    // Sinon, afficher l'événement complet
+                    return (
+                      <View
+                        key={`absolute-${eventPos.activity.id}`}
+                        style={[
+                          styles.absoluteEvent,
+                          {
+                            top: eventPos.top,
+                            height: eventPos.height,
+                            left: eventPos.left,
+                            width: eventPos.width,
+                            zIndex: eventPos.zIndex,
+                          },
+                        ]}
+                      >
+                        <EventCard
+                          activity={eventPos.activity}
+                          onPress={() => handleEventPress(eventPos.activity)}
+                          height={eventPos.height}
+                        />
+                      </View>
+                    );
+                  });
+                })()}
             </ScrollView>
             )}
           </>
@@ -498,8 +844,13 @@ const styles = StyleSheet.create({
   timelineScroll: {
     width: '100%',
   },
+  absoluteEvent: {
+    position: 'absolute',
+    zIndex: 10,
+  },
   timelineScrollContent: {
     paddingBottom: 100,
+    overflow: 'visible',
   },
   allDayEventsContainer: {
     marginBottom: 12,
@@ -551,6 +902,30 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     color: '#666',
+    textAlign: 'center',
+  },
+  eventDotContainer: {
+    position: 'absolute',
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dotRectangleContainer: {
+    position: 'absolute',
+    borderRadius: 4,
+    backgroundColor: '#F8F8F8',
+    borderLeftWidth: 3,
+    borderLeftColor: darkColor,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
+  dotRectangleText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: darkColor,
     textAlign: 'center',
   },
 });

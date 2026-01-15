@@ -83,13 +83,13 @@ export default function MapHeader({
 
           {/* Boutons à droite */}
           <View style={styles.searchActions}>
-            {onAIPress && !hideAIButton && (
-              <AnimatedAIButton onPress={onAIPress} size={38} />
-            )}
             {!hideNotificationButton && (
               <TouchableOpacity activeOpacity={0.7} style={styles.circleButtonLight}>
                 <Ionicons name="notifications-outline" size={18} color={darkColor} />
               </TouchableOpacity>
+            )}
+            {onAIPress && !hideAIButton && (
+              <AnimatedAIButton onPress={onAIPress} size={38} />
             )}
             <TouchableOpacity
               activeOpacity={0.7}

@@ -87,7 +87,9 @@ export default function ActivityRow({ activity, onTimeChange, onRemove }: Activi
   };
 
   const formatTime = (time?: string): string => {
-    if (!time) return 'Ajouter heure';
+    if (!time || time.trim() === '' || !/^\d{2}:\d{2}$/.test(time)) {
+      return 'Ajouter heure';
+    }
     return time;
   };
 

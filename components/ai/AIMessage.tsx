@@ -3,6 +3,7 @@ import { View, StyleSheet, Text } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { darkColor } from '@/constants/theme';
 import DraftPlanCard from './DraftPlanCard';
+import MarkdownText from './MarkdownText';
 
 interface DraftPlanActivity {
   placeName: string;
@@ -84,15 +85,14 @@ export default function AIMessage({ message, onValidateDraftPlan, onRejectDraftP
         }
       >
         {message.content && (
-          <Text
+          <MarkdownText
+            text={message.content}
             style={
               isUser
                 ? styles.userMessageText
                 : styles.aiMessageText
             }
-          >
-            {message.content}
-          </Text>
+          />
         )}
         
         {message.draftPlan && (
@@ -116,6 +116,7 @@ const styles = StyleSheet.create({
   aiMessageContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
+    alignItems: 'flex-end', // Aligne les éléments en bas
     marginBottom: 16,
   },
   aiIconContainer: {
@@ -126,7 +127,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-    alignSelf: 'flex-start',
+    marginBottom: 0, // S'assurer qu'il n'y a pas de marge en bas
   },
   userMessageBubble: {
     maxWidth: '80%',

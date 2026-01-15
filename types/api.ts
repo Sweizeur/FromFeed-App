@@ -82,6 +82,8 @@ export interface Place {
   googleWebsite?: string | null;
   googlePhotoUrl?: string | null;
   userRating?: number | null; // Note personnelle de l'utilisateur (0.5 à 5, par pas de 0.5)
+  category?: string | null;
+  type?: string | null;
   createdAt: string;
   lastUpdated: string;
 }

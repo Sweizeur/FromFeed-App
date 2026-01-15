@@ -76,6 +76,12 @@ export default function PlaceCard({ place, onPress, isSelectionMode = false, isS
           </Text>
         </View>
 
+        {place.type && (
+          <View style={styles.categoryContainer}>
+            <Text style={styles.categoryText}>{place.type}</Text>
+          </View>
+        )}
+
         {place.notes && (
           <Text style={styles.notes} numberOfLines={2}>
             {place.notes}
@@ -216,6 +222,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: '#666',
+  },
+  categoryContainer: {
+    marginTop: 6,
+    marginBottom: 4,
+    alignSelf: 'flex-start',
+  },
+  categoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: darkColor,
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   notes: {
     fontSize: 12,

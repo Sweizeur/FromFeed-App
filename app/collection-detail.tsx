@@ -100,9 +100,10 @@ export default function CollectionDetailScreen() {
     if (!id) return;
     try {
       setRefreshing(true);
+      // skipCache=true pour forcer la mise à jour depuis la DB lors d'un reload manuel
       const [collectionResponse, allPlacesResponse] = await Promise.all([
         getCollection(id),
-        getAllPlacesSummary(),
+        getAllPlacesSummary(true),
       ]);
       
       setCollection(collectionResponse.collection);

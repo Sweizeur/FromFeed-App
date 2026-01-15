@@ -75,12 +75,20 @@ export default function SignUpScreen() {
           router.replace('/home');
           return;
         } else {
-          // Session expirée, on reste sur l'écran de connexion
-          console.log('Session expirée, affichage de l\'écran de connexion');
+          // Session expirée ou erreur réseau, on reste sur l'écran de connexion
+          console.log('Session expirée ou erreur réseau, affichage de l\'écran de connexion');
         }
       }
     } catch (error) {
-      console.error('Erreur lors de la vérification de l\'authentification:', error);
+      // Gérer les erreurs réseau de manière plus gracieuse
+      if (error instanceof TypeError && error.message === 'Network request failed') {
+        console.error('Erreur réseau lors de la vérification de l\'authentification:', error);
+        console.error('Vérifiez que le backend est accessible et que ngrok est actif');
+        // Ne pas bloquer l'application en cas d'erreur réseau
+        // L'utilisateur pourra toujours essayer de se connecter
+      } else {
+        console.error('Erreur lors de la vérification de l\'authentification:', error);
+      }
     } finally {
       setCheckingAuth(false);
     }

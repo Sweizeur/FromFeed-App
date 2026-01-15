@@ -27,9 +27,7 @@ interface DraftPlanCardProps {
 }
 
 export default function DraftPlanCard({ draftPlan, onValidate, onReject }: DraftPlanCardProps) {
-  if (draftPlan.isValidated) {
-    return null;
-  }
+  const isValidated = draftPlan.isValidated === true;
 
   return (
     <>
@@ -75,20 +73,22 @@ export default function DraftPlanCard({ draftPlan, onValidate, onReject }: Draft
           ))}
         </View>
       </View>
-      <View style={styles.draftPlanActions}>
-        <TouchableOpacity
-          style={styles.draftPlanButton}
-          onPress={onReject}
-        >
-          <Ionicons name="close" size={22} color={darkColor} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.draftPlanButton}
-          onPress={onValidate}
-        >
-          <Ionicons name="checkmark" size={22} color={darkColor} />
-        </TouchableOpacity>
-      </View>
+      {!isValidated && (
+        <View style={styles.draftPlanActions}>
+          <TouchableOpacity
+            style={styles.draftPlanButton}
+            onPress={onReject}
+          >
+            <Ionicons name="close" size={22} color={darkColor} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.draftPlanButton}
+            onPress={onValidate}
+          >
+            <Ionicons name="checkmark" size={22} color={darkColor} />
+          </TouchableOpacity>
+        </View>
+      )}
     </>
   );
 }

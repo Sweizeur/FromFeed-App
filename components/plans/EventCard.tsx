@@ -6,11 +6,16 @@ import { darkColor } from '@/constants/theme';
 interface EventCardProps {
   activity: PlanActivity;
   onPress: () => void;
+  height?: number; // Hauteur calculée selon la durée
 }
 
-export default function EventCard({ activity, onPress }: EventCardProps) {
+export default function EventCard({ activity, onPress, height }: EventCardProps) {
   return (
-    <TouchableOpacity style={styles.eventCard} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity 
+      style={[styles.eventCard, height ? { height } : undefined]} 
+      onPress={onPress} 
+      activeOpacity={0.7}
+    >
       <View style={styles.eventHeader}>
         <Text style={styles.eventTime}>
           {activity.startTime && activity.endTime
@@ -45,9 +50,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F8F8',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 8,
     borderLeftWidth: 3,
     borderLeftColor: darkColor,
+    flex: 1,
   },
   eventHeader: {
     flexDirection: 'row',

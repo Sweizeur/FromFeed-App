@@ -51,12 +51,13 @@ export function usePlaces() {
   }, [filterValidPlaces]);
 
   /**
-   * Rafraîchit la liste des places
+   * Rafraîchit la liste des places (reload manuel - bypass le cache Redis)
    */
   const refreshPlaces = useCallback(async () => {
     try {
       setRefreshing(true);
-      const response = await getAllPlacesSummary();
+      // skipCache=true pour forcer la mise à jour depuis la DB lors d'un reload manuel
+      const response = await getAllPlacesSummary(true);
       const validPlaces = filterValidPlaces(response.places);
       setPlacesSummary(validPlaces);
       setPlacesListKey((prev) => prev + 1); // Forcer le re-render de PlacesList

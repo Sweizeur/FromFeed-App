@@ -10,11 +10,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, Easing } from 'react-native-reanimated';
-import { getConversation, sendAIMessage, validateDraftPlan, rejectDraftPlan } from '@/lib/api';
+import { getConversation, validateDraftPlan, rejectDraftPlan } from '@/lib/api';
 import ConversationsModal from '@/components/modals/ConversationsModal';
 import AIHeader from '@/components/ai/AIHeader';
 import AIMessage from '@/components/ai/AIMessage';
-import AILoadingIndicator from '@/components/ai/AILoadingIndicator';
 import AIInput from '@/components/ai/AIInput';
 import AIEmptyState from '@/components/ai/AIEmptyState';
 
@@ -254,7 +253,7 @@ export default function AIPage() {
     const messagesWithUser = [...messages, userMessage];
     setMessages(messagesWithUser);
     setPrompt('');
-    setIsLoading(true);
+    setIsLoading(true); // Désactiver l'input pendant le streaming
     
     // Sauvegarder immédiatement le message utilisateur dans le cache
     if (currentConversationId) {
@@ -268,76 +267,128 @@ export default function AIPage() {
       }
     }
 
+    // Créer un message assistant vide qui sera mis à jour en temps réel
+    const aiMessageId = (Date.now() + 1).toString();
+    const aiMessage: Message = {
+      id: aiMessageId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+    };
+    setMessages([...messagesWithUser, aiMessage]);
+
     try {
-      const result = await sendAIMessage(userPrompt, currentConversationId);
+      const { sendAIMessageStreaming } = await import('@/lib/api');
       
-      if (result?.conversationId) {
-        const newConversationId = result.conversationId;
-        setConversationId(newConversationId);
-        try {
-          await AsyncStorage.setItem(CONVERSATION_ID_KEY, newConversationId);
-          
-          // Vérifier périodiquement si un titre a été généré (polling toutes les 2 secondes, max 5 tentatives)
-          let attempts = 0;
-          const maxAttempts = 5;
-          const checkTitle = setInterval(async () => {
-            attempts++;
-            try {
-              const convResult = await getConversation(newConversationId);
-              if (convResult.success && convResult.conversation?.title) {
-                animateTitleChange(convResult.conversation.title);
-                clearInterval(checkTitle);
-              } else if (attempts >= maxAttempts) {
-                clearInterval(checkTitle);
-              }
-            } catch (error) {
-              console.error('[AIPage] Erreur lors de la vérification du titre:', error);
-              if (attempts >= maxAttempts) {
-                clearInterval(checkTitle);
-              }
-            }
-          }, 2000);
-        } catch (error) {
-          console.error('[AIPage] Erreur lors de la sauvegarde du conversationId:', error);
-        }
-      }
+      let accumulatedContent = '';
       
-      if (result?.response && result.response.trim().length > 0) {
-        const { cleanContent, draftPlan } = extractDraftPlan(result.response);
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: cleanContent,
-          timestamp: new Date(),
-          draftPlan,
-        };
-        const finalConversationId = result.conversationId || currentConversationId;
-        const updatedMessages = [...messagesWithUser, aiMessage];
-        setMessages(updatedMessages);
-        
-        // Sauvegarder dans le cache
-        if (finalConversationId) {
-          try {
-            await AsyncStorage.setItem(
-              getConversationMessagesKey(finalConversationId),
-              JSON.stringify(updatedMessages)
+      await sendAIMessageStreaming(
+        userPrompt,
+        currentConversationId,
+        // onChunk: Mettre à jour le message en temps réel
+        (chunk: string) => {
+          accumulatedContent += chunk;
+          setMessages((prev) => {
+            const updated = prev.map((msg) =>
+              msg.id === aiMessageId
+                ? { ...msg, content: accumulatedContent }
+                : msg
             );
-          } catch (cacheError) {
-            console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+            // Scroll automatique vers le bas quand un nouveau chunk arrive
+            setTimeout(() => {
+              if (scrollViewRef.current) {
+                scrollViewRef.current.scrollToEnd({ animated: true });
+              }
+            }, 50);
+            return updated;
+          });
+        },
+        // onComplete: Finaliser le message avec le draft plan si présent
+        async (fullResponse: string, newConversationId: string) => {
+          const { cleanContent, draftPlan } = extractDraftPlan(fullResponse);
+          
+          setConversationId(newConversationId);
+          try {
+            await AsyncStorage.setItem(CONVERSATION_ID_KEY, newConversationId);
+            
+            // Vérifier périodiquement si un titre a été généré
+            let attempts = 0;
+            const maxAttempts = 5;
+            const checkTitle = setInterval(async () => {
+              attempts++;
+              try {
+                const convResult = await getConversation(newConversationId);
+                if (convResult.success && convResult.conversation?.title) {
+                  animateTitleChange(convResult.conversation.title);
+                  clearInterval(checkTitle);
+                } else if (attempts >= maxAttempts) {
+                  clearInterval(checkTitle);
+                }
+              } catch (error) {
+                console.error('[AIPage] Erreur lors de la vérification du titre:', error);
+                if (attempts >= maxAttempts) {
+                  clearInterval(checkTitle);
+                }
+              }
+            }, 2000);
+          } catch (error) {
+            console.error('[AIPage] Erreur lors de la sauvegarde du conversationId:', error);
           }
+          
+          // Mettre à jour le message final avec le draft plan
+          setMessages((prev) => {
+            const updated = prev.map((msg) =>
+              msg.id === aiMessageId
+                ? { ...msg, content: cleanContent, draftPlan }
+                : msg
+            );
+            
+            // Sauvegarder dans le cache
+            if (newConversationId) {
+              AsyncStorage.setItem(
+                getConversationMessagesKey(newConversationId),
+                JSON.stringify(updated)
+              ).catch((cacheError) => {
+                console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+              });
+            }
+            
+            return updated;
+          });
+          
+          setIsLoading(false); // Réactiver l'input quand c'est terminé
+        },
+        // onError: Afficher un message d'erreur
+        (error: Error) => {
+          console.error('[AIPage] Erreur lors du streaming:', error);
+          setMessages((prev) => {
+            const updated = prev.map((msg) =>
+              msg.id === aiMessageId
+                ? {
+                    ...msg,
+                    content: `Désolé, une erreur est survenue: ${error.message}`,
+                  }
+                : msg
+            );
+            return updated;
+          });
+          setIsLoading(false); // Réactiver l'input même en cas d'erreur
         }
-      }
+      );
     } catch (error) {
       console.error('[AIPage] Erreur lors de la soumission:', error);
-      const errorMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Désolé, une erreur est survenue: ${error instanceof Error ? error.message : 'Une erreur est survenue'}`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
+      setMessages((prev) => {
+        const updated = prev.map((msg) =>
+          msg.id === aiMessageId
+            ? {
+                ...msg,
+                content: `Désolé, une erreur est survenue: ${error instanceof Error ? error.message : 'Une erreur est survenue'}`,
+              }
+            : msg
+        );
+        return updated;
+      });
+      setIsLoading(false); // Réactiver l'input en cas d'erreur
     }
   };
 
@@ -413,8 +464,9 @@ export default function AIPage() {
                   message={message}
                   onValidateDraftPlan={async () => {
                     if (!conversationId) return;
-                    setMessages((prev) =>
-                      prev.map((msg) =>
+                    // Marquer le plan comme validé localement
+                    setMessages((prev) => {
+                      const updated = prev.map((msg) =>
                         msg.id === message.id
                           ? { 
                               ...msg, 
@@ -423,13 +475,48 @@ export default function AIPage() {
                                 : undefined
                             }
                           : msg
-                      )
-                    );
+                      );
+                      // Sauvegarder dans le cache immédiatement
+                      if (conversationId) {
+                        AsyncStorage.setItem(
+                          getConversationMessagesKey(conversationId),
+                          JSON.stringify(updated)
+                        ).catch((cacheError) => {
+                          console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                        });
+                      }
+                      return updated;
+                    });
                     try {
                       const result = await validateDraftPlan(conversationId, message.draftPlan!, message.id);
-                      if (result.success && conversationId) {
-                        try {
-                          const updatedMessages = messages.map((msg) =>
+                      if (!result.success) {
+                        // En cas d'échec, remettre isValidated à false
+                        setMessages((prev) => {
+                          const updated = prev.map((msg) =>
+                            msg.id === message.id
+                              ? { 
+                                  ...msg, 
+                                  draftPlan: msg.draftPlan 
+                                    ? { ...msg.draftPlan, isValidated: false }
+                                    : undefined
+                                }
+                              : msg
+                          );
+                          // Mettre à jour le cache
+                          if (conversationId) {
+                            AsyncStorage.setItem(
+                              getConversationMessagesKey(conversationId),
+                              JSON.stringify(updated)
+                            ).catch((cacheError) => {
+                              console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                            });
+                          }
+                          return updated;
+                        });
+                      } else {
+                        // En cas de succès, s'assurer que le cache est à jour avec isValidated: true
+                        setMessages((prev) => {
+                          const updated = prev.map((msg) =>
                             msg.id === message.id
                               ? { 
                                   ...msg, 
@@ -439,31 +526,23 @@ export default function AIPage() {
                                 }
                               : msg
                           );
-                          await AsyncStorage.setItem(
-                            getConversationMessagesKey(conversationId),
-                            JSON.stringify(updatedMessages)
-                          );
-                        } catch (cacheError) {
-                          console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
-                        }
-                      } else {
-                        setMessages((prev) =>
-                          prev.map((msg) =>
-                            msg.id === message.id
-                              ? { 
-                                  ...msg, 
-                                  draftPlan: msg.draftPlan 
-                                    ? { ...msg.draftPlan, isValidated: false }
-                                    : undefined
-                                }
-                              : msg
-                          )
-                        );
+                          // Mettre à jour le cache
+                          if (conversationId) {
+                            AsyncStorage.setItem(
+                              getConversationMessagesKey(conversationId),
+                              JSON.stringify(updated)
+                            ).catch((cacheError) => {
+                              console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                            });
+                          }
+                          return updated;
+                        });
                       }
                     } catch (error) {
                       console.error('[AIPage] Erreur lors de la validation du plan:', error);
-                      setMessages((prev) =>
-                        prev.map((msg) =>
+                      // En cas d'erreur, remettre isValidated à false
+                      setMessages((prev) => {
+                        const updated = prev.map((msg) =>
                           msg.id === message.id
                             ? { 
                                 ...msg, 
@@ -472,14 +551,25 @@ export default function AIPage() {
                                   : undefined
                               }
                             : msg
-                        )
-                      );
+                        );
+                        // Mettre à jour le cache
+                        if (conversationId) {
+                          AsyncStorage.setItem(
+                            getConversationMessagesKey(conversationId),
+                            JSON.stringify(updated)
+                          ).catch((cacheError) => {
+                            console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                          });
+                        }
+                        return updated;
+                      });
                     }
                   }}
                   onRejectDraftPlan={async () => {
                     if (!conversationId) return;
-                    setMessages((prev) =>
-                      prev.map((msg) =>
+                    // Marquer le plan comme validé (rejeté) localement
+                    setMessages((prev) => {
+                      const updated = prev.map((msg) =>
                         msg.id === message.id
                           ? { 
                               ...msg, 
@@ -488,21 +578,48 @@ export default function AIPage() {
                                 : undefined
                             }
                           : msg
-                      )
-                    );
+                      );
+                      // Sauvegarder dans le cache immédiatement
+                      if (conversationId) {
+                        AsyncStorage.setItem(
+                          getConversationMessagesKey(conversationId),
+                          JSON.stringify(updated)
+                        ).catch((cacheError) => {
+                          console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                        });
+                      }
+                      return updated;
+                    });
                     try {
                       await rejectDraftPlan(conversationId, message.id);
-                      setMessages((prev) =>
-                        prev.map((msg) =>
+                      // S'assurer que le cache est à jour après le rejet
+                      setMessages((prev) => {
+                        const updated = prev.map((msg) =>
                           msg.id === message.id
-                            ? { ...msg, draftPlan: undefined }
+                            ? { 
+                                ...msg, 
+                                draftPlan: msg.draftPlan 
+                                  ? { ...msg.draftPlan, isValidated: true }
+                                  : undefined
+                              }
                             : msg
-                        )
-                      );
+                        );
+                        // Mettre à jour le cache
+                        if (conversationId) {
+                          AsyncStorage.setItem(
+                            getConversationMessagesKey(conversationId),
+                            JSON.stringify(updated)
+                          ).catch((cacheError) => {
+                            console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                          });
+                        }
+                        return updated;
+                      });
                     } catch (error) {
                       console.error('[AIPage] Erreur lors du rejet du plan:', error);
-                      setMessages((prev) =>
-                        prev.map((msg) =>
+                      // En cas d'erreur, remettre isValidated à false
+                      setMessages((prev) => {
+                        const updated = prev.map((msg) =>
                           msg.id === message.id
                             ? { 
                                 ...msg, 
@@ -511,14 +628,23 @@ export default function AIPage() {
                                   : undefined
                               }
                             : msg
-                        )
-                      );
+                        );
+                        // Mettre à jour le cache
+                        if (conversationId) {
+                          AsyncStorage.setItem(
+                            getConversationMessagesKey(conversationId),
+                            JSON.stringify(updated)
+                          ).catch((cacheError) => {
+                            console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                          });
+                        }
+                        return updated;
+                      });
                     }
                   }}
                 />
               ))}
 
-              {isLoading && <AILoadingIndicator />}
             </ScrollView>
           ) : (
             <AIEmptyState

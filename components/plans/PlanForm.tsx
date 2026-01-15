@@ -118,13 +118,71 @@ export default function PlanForm({ plan, initialDate, onClose, onSave }: PlanFor
     setActivities(newActivities);
   };
 
+  // Fonction pour ajouter/soustraire des heures à une heure string (HH:mm)
+  const addHours = (timeString: string, hours: number): string => {
+    // Vérifier que le format est valide (HH:mm)
+    if (!timeString || !/^\d{2}:\d{2}$/.test(timeString)) {
+      return timeString; // Retourner tel quel si invalide
+    }
+    
+    const [h, m] = timeString.split(':').map(Number);
+    // Vérifier que les valeurs sont valides
+    if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+      return timeString; // Retourner tel quel si invalide
+    }
+    
+    const date = new Date();
+    date.setHours(h, m, 0, 0);
+    date.setHours(date.getHours() + hours);
+    const newHours = date.getHours().toString().padStart(2, '0');
+    const newMinutes = date.getMinutes().toString().padStart(2, '0');
+    return `${newHours}:${newMinutes}`;
+  };
+
   const updateActivityTime = (index: number, time: string, isEndTime: boolean = false) => {
     const newActivities = [...activities];
-    if (isEndTime) {
-      newActivities[index].endTime = time;
-    } else {
-      newActivities[index].startTime = time;
+    
+    // Si time est vide, on supprime simplement l'heure sans calculer l'autre
+    if (!time || time.trim() === '') {
+      if (isEndTime) {
+        newActivities[index].endTime = undefined;
+      } else {
+        newActivities[index].startTime = undefined;
+      }
+      setActivities(newActivities);
+      return;
     }
+    
+    // Vérifier que le format est valide avant de continuer
+    if (!/^\d{2}:\d{2}$/.test(time)) {
+      // Format invalide, ne rien faire
+      return;
+    }
+    
+    if (isEndTime) {
+      // Si on définit l'heure de fin
+      newActivities[index].endTime = time;
+      // Si l'heure de départ est null ou vide, la définir à -1 heure
+      if (!newActivities[index].startTime || newActivities[index].startTime.trim() === '') {
+        const calculatedStartTime = addHours(time, -1);
+        // Vérifier que le résultat est valide avant de l'assigner
+        if (/^\d{2}:\d{2}$/.test(calculatedStartTime)) {
+          newActivities[index].startTime = calculatedStartTime;
+        }
+      }
+    } else {
+      // Si on définit l'heure de départ
+      newActivities[index].startTime = time;
+      // Si l'heure de fin est null ou vide, la définir à +1 heure
+      if (!newActivities[index].endTime || newActivities[index].endTime.trim() === '') {
+        const calculatedEndTime = addHours(time, 1);
+        // Vérifier que le résultat est valide avant de l'assigner
+        if (/^\d{2}:\d{2}$/.test(calculatedEndTime)) {
+          newActivities[index].endTime = calculatedEndTime;
+        }
+      }
+    }
+    
     setActivities(newActivities);
   };
 
@@ -143,8 +201,8 @@ export default function PlanForm({ plan, initialDate, onClose, onSave }: PlanFor
         activities: activities.map((a) => ({
           placeId: a.placeId,
           order: a.order,
-          startTime: a.startTime,
-          endTime: a.endTime,
+          startTime: a.startTime && a.startTime.trim() !== '' && /^\d{2}:\d{2}$/.test(a.startTime) ? a.startTime : undefined,
+          endTime: a.endTime && a.endTime.trim() !== '' && /^\d{2}:\d{2}$/.test(a.endTime) ? a.endTime : undefined,
           notes: a.notes,
         })),
       };
