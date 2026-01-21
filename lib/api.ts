@@ -19,15 +19,25 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:300
 /**
  * Effectue une requête API authentifiée
  */
+type ApiRequestOptions = RequestInit & {
+  /**
+   * Timeout en millisecondes avant d'annuler la requête (AbortController).
+   * Par défaut: 15s.
+   */
+  timeoutMs?: number;
+};
+
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: ApiRequestOptions = {}
 ): Promise<T> {
   const token = await getStoredToken();
   
+  const { timeoutMs = 15000, ...fetchOptions } = options;
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {}),
+    ...((fetchOptions.headers as Record<string, string>) || {}),
   };
 
   // Ajouter le token d'authentification si disponible
@@ -44,12 +54,12 @@ async function apiRequest<T>(
   
   // Créer un AbortController pour gérer le timeout (compatible React Native)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 secondes
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   
   let response: Response;
   try {
     response = await fetch(`${BACKEND_URL}${endpoint}`, {
-      ...options,
+      ...fetchOptions,
       headers,
       signal: controller.signal,
     });
@@ -89,6 +99,9 @@ export async function analyzeLink(url: string): Promise<LinkPreviewResponse> {
   return apiRequest<LinkPreviewResponse>('/api/link-preview', {
     method: 'POST',
     body: JSON.stringify({ url }),
+    // Playwright + scraping peut prendre du temps en production (cold start / navigation).
+    // On augmente uniquement pour cet endpoint pour éviter les 499 (client abort ~15s).
+    timeoutMs: 60000,
   });
 }
 
