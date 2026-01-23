@@ -62,7 +62,8 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "./plugins/with-ats-config.js"
+      "./plugins/with-ats-config.js",
+      "./plugins/with-notifications-entitlements.js"
     ],
     "experiments": {
       "typedRoutes": true,
