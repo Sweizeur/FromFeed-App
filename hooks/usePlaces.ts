@@ -1,16 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getAllPlacesSummary, getPlaceDetails, type Place, type PlaceSummary } from '@/lib/api';
+
+// Cache côté client pour éviter les requêtes multiples
+const CLIENT_CACHE_DURATION = 30 * 1000; // 30 secondes
+let clientCache: {
+  data: PlaceSummary[];
+  timestamp: number;
+} | null = null;
 
 /**
  * Hook pour gérer les places (chargement, rafraîchissement, sélection)
  */
 export function usePlaces() {
-  const [placesSummary, setPlacesSummary] = useState<PlaceSummary[]>([]);
-  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [placesListKey, setPlacesListKey] = useState(0); // Key pour forcer le re-render de PlacesList
-  const [refreshing, setRefreshing] = useState(false);
+  // Ref pour éviter les requêtes simultanées multiples
+  const isLoadingRef = useRef(false);
 
   /**
    * Filtre les places pour ne garder que celles avec des coordonnées valides
@@ -29,40 +32,117 @@ export function usePlaces() {
     );
   }, []);
 
+  // Initialiser avec le cache client si disponible (évite l'effet de reload)
+  const [placesSummary, setPlacesSummary] = useState<PlaceSummary[]>(() => {
+    if (clientCache && (Date.now() - clientCache.timestamp) < CLIENT_CACHE_DURATION) {
+      // Filtrer les places valides depuis le cache
+      return clientCache.data.filter(
+        (place) =>
+          place &&
+          place.id &&
+          place.lat != null &&
+          place.lon != null &&
+          !isNaN(place.lat) &&
+          !isNaN(place.lon) &&
+          isFinite(place.lat) &&
+          isFinite(place.lon)
+      );
+    }
+    return [];
+  });
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  // Ne pas afficher le loader si on a déjà des données du cache
+  const [loading, setLoading] = useState(() => {
+    // Si on a des données du cache, ne pas afficher le loader
+    return placesSummary.length === 0;
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [placesListKey, setPlacesListKey] = useState(0); // Key pour forcer le re-render de PlacesList
+  const [refreshing, setRefreshing] = useState(false);
+
   /**
    * Charge toutes les places depuis l'API
+   * Utilise le cache par défaut (pour load initial et changement de page)
+   * @param skipCache Si true, bypass le cache Redis ET le cache client
+   * @param forceRefresh Si true, force le rechargement même si le cache client est valide
    */
-  const loadPlaces = useCallback(async () => {
+  const loadPlaces = useCallback(async (skipCache: boolean = false, forceRefresh: boolean = false) => {
+    // Vérifier le cache client si on ne force pas le refresh
+    if (!forceRefresh && !skipCache && clientCache) {
+      const cacheAge = Date.now() - clientCache.timestamp;
+      if (cacheAge < CLIENT_CACHE_DURATION) {
+        console.log('[usePlaces] Utilisation du cache client (âge:', Math.round(cacheAge / 1000), 's)');
+        const validPlaces = filterValidPlaces(clientCache.data);
+        setPlacesSummary(validPlaces);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Éviter les requêtes simultanées multiples
+    if (isLoadingRef.current) {
+      console.log('[usePlaces] Requête déjà en cours, skip...');
+      // Utiliser le cache client si disponible pendant qu'une requête est en cours
+      if (clientCache) {
+        const validPlaces = filterValidPlaces(clientCache.data);
+        setPlacesSummary(validPlaces);
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
+      isLoadingRef.current = true;
       setLoading(true);
       setError(null);
-      console.log('[usePlaces] Chargement de toutes les places...');
-      const response = await getAllPlacesSummary();
+      
+      console.log('[usePlaces] Chargement de toutes les places...', skipCache ? '(skip cache)' : '(avec cache)');
+      const response = await getAllPlacesSummary(skipCache);
       console.log('[usePlaces] Places chargées:', response.places.length);
 
       const validPlaces = filterValidPlaces(response.places);
+      
+      // Mettre à jour le cache client
+      clientCache = {
+        data: response.places,
+        timestamp: Date.now(),
+      };
+      
       setPlacesSummary(validPlaces);
     } catch (err) {
-      console.error('[usePlaces] Erreur lors du chargement des places:', err);
+      __DEV__ && console.error('[usePlaces] Erreur lors du chargement des places:', err);
       setError(err instanceof Error ? err.message : 'Erreur lors du chargement des places');
     } finally {
+      isLoadingRef.current = false;
       setLoading(false);
     }
   }, [filterValidPlaces]);
 
   /**
-   * Rafraîchit la liste des places (reload manuel - bypass le cache Redis)
+   * Rafraîchit la liste des places
+   * @param skipCache Si true, bypass le cache Redis (pour reload manuel uniquement)
+   *                  Si false, utilise le cache (pour actions automatiques)
    */
-  const refreshPlaces = useCallback(async () => {
+  const refreshPlaces = useCallback(async (skipCache: boolean = false) => {
+    // Pour refreshPlaces, on force toujours le rechargement (forceRefresh=true)
+    // mais on respecte skipCache pour le cache Redis
     try {
       setRefreshing(true);
-      // skipCache=true pour forcer la mise à jour depuis la DB lors d'un reload manuel
-      const response = await getAllPlacesSummary(true);
+      console.log('[usePlaces] Rafraîchissement des places...', skipCache ? '(skip cache)' : '(avec cache)');
+      
+      const response = await getAllPlacesSummary(skipCache);
       const validPlaces = filterValidPlaces(response.places);
+      
+      // Mettre à jour le cache client
+      clientCache = {
+        data: response.places,
+        timestamp: Date.now(),
+      };
+      
       setPlacesSummary(validPlaces);
       setPlacesListKey((prev) => prev + 1); // Forcer le re-render de PlacesList
     } catch (err) {
-      console.error('[usePlaces] Erreur lors du rafraîchissement des places:', err);
+      __DEV__ && console.error('[usePlaces] Erreur lors du rafraîchissement des places:', err);
     } finally {
       setRefreshing(false);
     }
@@ -77,8 +157,8 @@ export function usePlaces() {
       const response = await getPlaceDetails(placeId);
       setSelectedPlace(response.place);
     } catch (err) {
-      console.error('[usePlaces] Erreur lors du chargement des détails:', err);
-      throw err;
+      __DEV__ && console.error('[usePlaces] Erreur lors du chargement des détails:', err);
+      // Erreur silencieuse - l'utilisateur ne doit pas voir les erreurs techniques
     }
   }, []);
 
@@ -90,9 +170,36 @@ export function usePlaces() {
   }, []);
 
   // Charger les places au montage
+  // Utiliser le cache client si disponible (évite les requêtes multiples lors de switch rapide)
   useEffect(() => {
-    loadPlaces();
-  }, [loadPlaces]);
+    // Si on a déjà des données (depuis l'initialisation du state), vérifier si on doit recharger
+    if (placesSummary.length > 0) {
+      // Vérifier si le cache est encore valide
+      if (clientCache && (Date.now() - clientCache.timestamp) < CLIENT_CACHE_DURATION) {
+        // Cache encore valide, ne pas recharger
+        console.log('[usePlaces] Données déjà disponibles depuis le cache valide, pas de rechargement');
+        return;
+      }
+      // Cache expiré, recharger silencieusement en arrière-plan
+      console.log('[usePlaces] Cache expiré, rechargement en arrière-plan');
+      loadPlaces(false, false).catch(() => {
+        // Erreur silencieuse, on garde les données du cache
+      });
+      return;
+    }
+
+    // Si on a des données en cache client récentes, les utiliser directement
+    if (clientCache && (Date.now() - clientCache.timestamp) < CLIENT_CACHE_DURATION) {
+      console.log('[usePlaces] Utilisation du cache client au montage');
+      const validPlaces = filterValidPlaces(clientCache.data);
+      setPlacesSummary(validPlaces);
+      setLoading(false);
+      // Ne PAS recharger si le cache est encore valide (évite les requêtes inutiles)
+    } else {
+      // Pas de cache ou cache expiré, charger normalement
+      loadPlaces();
+    }
+  }, [loadPlaces, filterValidPlaces, placesSummary.length]);
 
   return {
     placesSummary,

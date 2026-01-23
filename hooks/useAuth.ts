@@ -6,6 +6,7 @@ import {
   getStoredToken,
   refreshSession,
   type AuthUser,
+  type AuthResult,
 } from '../lib/auth-mobile';
 
 export function useAuth() {
@@ -38,22 +39,27 @@ export function useAuth() {
         }
       }
     } catch (error) {
-      console.error('Error loading user:', error);
+      __DEV__ && console.error('Error loading user:', error);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleSignIn() {
+  async function handleSignIn(): Promise<AuthResult> {
     try {
-      // Utiliser le proxy en développement, deep links en production
-      const useProxy = process.env.EXPO_PUBLIC_USE_PROXY === 'true';
-      const session = await signInWithGoogle(useProxy);
-      setUser(session.user);
-      setToken(session.token);
+      const result = await signInWithGoogle();
+      if (result.success && result.data) {
+        setUser(result.data.user);
+        setToken(result.data.token);
+      }
+      return result;
     } catch (error) {
-      console.error('Error signing in:', error);
-      throw error;
+      __DEV__ && console.error('Error signing in:', error);
+      return {
+        success: false,
+        errorCode: 'UNKNOWN',
+        errorMessage: 'Erreur lors de la connexion',
+      };
     }
   }
 

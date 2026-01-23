@@ -152,7 +152,7 @@ export default function CreateGroupModal({
       onSuccess();
       onClose();
     } catch (error) {
-      console.error('[CreateGroupModal] Erreur:', error);
+      __DEV__ && console.error('[CreateGroupModal] Erreur:', error);
       // TODO: Afficher un toast d'erreur
     } finally {
       setIsLoading(false);

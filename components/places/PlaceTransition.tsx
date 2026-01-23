@@ -19,7 +19,7 @@ interface PlaceTransitionProps {
   onPlacePress: (place: Place | PlaceSummary) => void;
   onBack: () => void;
   scrollViewRef?: React.RefObject<any>;
-  onRefreshPlaces?: () => Promise<void>;
+  onRefreshPlaces?: (skipCache?: boolean) => Promise<void>;
   refreshingPlaces?: boolean;
   onRatingUpdated?: () => void | Promise<void>;
   onDeletePlaces?: (placeIds: string[]) => Promise<void>;

@@ -43,7 +43,7 @@ export default function GroupsScreen({ activeTab: propActiveTab, onTabChange: pr
       setGroups(groupsData.groups as Group[]);
       setCollections(collectionsData.collections as Collection[]);
     } catch (error) {
-      console.error('[GroupsScreen] Erreur lors du chargement:', error);
+      __DEV__ && console.error('[GroupsScreen] Erreur lors du chargement:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);

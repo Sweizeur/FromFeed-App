@@ -74,17 +74,21 @@ export default function HomeScreen() {
   
   // Shared value pour suivre la position de la carte coulissante
   const cardTranslateY = useSharedValue(0);
+  
+  // Sauvegarder la dernière position translateY de la carte pour la restaurer au remontage
+  // Utiliser un état persistant en dehors du composant pour survivre au démontage
+  const lastCardTranslateYRef = useRef<number | null>(null);
 
   /**
    * Gère le clic sur un lieu (marqueur ou dans la liste)
    */
-  const handlePlacePress = async (place: Place | PlaceSummary) => {
+  const handlePlacePress = React.useCallback(async (place: Place | PlaceSummary) => {
     // Si c'est un PlaceSummary, charger les détails complets
     if ('provider' in place && !('createdAt' in place)) {
       try {
         await loadPlaceDetails(place.id);
       } catch (error) {
-        console.error('[Home] Erreur lors du chargement des détails:', error);
+        __DEV__ && console.error('[Home] Erreur lors du chargement des détails:', error);
         showError('Impossible de charger les détails du lieu.');
         return;
       }
@@ -100,7 +104,7 @@ export default function HomeScreen() {
     if (slidingCardRef.current) {
       slidingCardRef.current.animateToSnapPoint(50);
     }
-  };
+  }, [loadPlaceDetails, setSelectedPlace, animateToPlace]);
 
   /**
    * Gère la sauvegarde d'un lien
@@ -121,8 +125,8 @@ export default function HomeScreen() {
     const placeName = result.llm?.placeName || result.place?.name || 'Lieu';
     showSuccess(`${placeName} a été ajouté avec succès !`);
 
-    // Rafraîchir toutes les places
-    await refreshPlaces();
+    // Rafraîchir toutes les places (avec cache car c'est une action automatique)
+    await refreshPlaces(false);
   };
 
   /**
@@ -143,12 +147,11 @@ export default function HomeScreen() {
       // Afficher un message de succès
       showSuccess(`${placeIds.length} lieu${placeIds.length > 1 ? 'x' : ''} supprimé${placeIds.length > 1 ? 's' : ''} avec succès`);
       
-      // Rafraîchir la liste des lieux
-      await refreshPlaces();
+      // Rafraîchir la liste des lieux (avec cache car c'est une action automatique)
+      await refreshPlaces(false);
     } catch (error) {
-      console.error('[Home] Erreur lors de la suppression:', error);
+      __DEV__ && console.error('[Home] Erreur lors de la suppression:', error);
       showError('Une erreur est survenue lors de la suppression des lieux.');
-      throw error;
     }
   };
 
@@ -164,6 +167,11 @@ export default function HomeScreen() {
    * Filtre les places selon les filtres sélectionnés
    */
   const filteredPlaces = React.useMemo(() => {
+    if (!selectedCategory && !selectedType) {
+      // Pas de filtre : retourner directement la liste (évite le filter inutile)
+      return placesSummary;
+    }
+    
     return placesSummary.filter((place) => {
       // Filtre par catégorie
       if (selectedCategory && place.category !== selectedCategory) {
@@ -181,9 +189,30 @@ export default function HomeScreen() {
   }, [placesSummary, selectedCategory, selectedType]);
 
   /**
+   * Callback pour gérer les changements de position de la carte coulissante
+   * Note: cardTranslateY est un shared value (référence stable), pas besoin de dépendance
+   */
+  const handleCardPositionChange = React.useCallback((translateY: number) => {
+    cardTranslateY.value = translateY;
+  }, []); // Pas de dépendances car cardTranslateY est un shared value stable
+
+  /**
+   * Callback quand la carte atteint un snap point
+   * On sauvegarde le translateY pour le restaurer au remontage
+   */
+  const handleSnapPointReached = React.useCallback((translateY: number, cardHeight: number) => {
+    // Sauvegarder le translateY pour le restaurer au remontage
+    lastCardTranslateYRef.current = translateY;
+  }, []);
+
+  /**
    * Style animé pour ajuster la hauteur de la carte en fonction de la position de la carte coulissante
+   * Utiliser 'worklet' pour optimiser les performances
+   * Note: Dans un worklet, on utilise directement la shared value sans .value
    */
   const mapContainerAnimatedStyle = useAnimatedStyle(() => {
+    'worklet';
+    // Dans un worklet, on accède directement à la shared value (pas besoin de .value)
     const mapHeight = HEADER_WHITE_HEIGHT + cardTranslateY.value;
     return {
       height: mapHeight,
@@ -265,13 +294,13 @@ export default function HomeScreen() {
                 headerHeight={headerHeight}
                 headerWhiteHeight={HEADER_WHITE_HEIGHT}
                 bottomNavHeight={BOTTOM_NAV_HEIGHT + insets.bottom}
-                initialSnap="mid"
+                initialSnap={lastCardTranslateYRef.current === null ? "mid" : undefined}
+                restoreTranslateY={lastCardTranslateYRef.current}
                 enableFling
                 grabber
                 testID="sliding-card"
-                onPositionChange={(translateY) => {
-                  cardTranslateY.value = translateY;
-                }}
+                onPositionChange={handleCardPositionChange}
+                onSnapPointReached={handleSnapPointReached}
               >
                 <PlaceTransition
                   selectedPlace={selectedPlace}
@@ -282,7 +311,7 @@ export default function HomeScreen() {
                   scrollViewRef={placeDetailsScrollViewRef}
                   onRefreshPlaces={refreshPlaces}
                   refreshingPlaces={refreshing}
-                  onRatingUpdated={refreshPlaces}
+                  onRatingUpdated={() => refreshPlaces(false)}
                   onDeletePlaces={handleDeletePlaces}
                   onAddToCollection={(placeId) => {
                     setSelectedPlaceForCollection(placeId);
@@ -328,7 +357,7 @@ export default function HomeScreen() {
             }}
             placeId={selectedPlaceForCollection}
             onSuccess={() => {
-              refreshPlaces();
+              refreshPlaces(false);
             }}
           />
         )}

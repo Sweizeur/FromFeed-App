@@ -72,7 +72,7 @@ export default function AIModal({ visible, onClose, onSubmit }: AIModalProps) {
       setPrompt('');
       onClose();
     } catch (error) {
-      console.error('Erreur lors de la soumission:', error);
+      __DEV__ && console.error('Erreur lors de la soumission:', error);
     } finally {
       setIsLoading(false);
     }

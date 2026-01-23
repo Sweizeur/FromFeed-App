@@ -8,7 +8,7 @@ import { darkColor } from '@/constants/theme';
 interface PlacesListProps {
   onPlacePress?: (place: PlaceSummary) => void;
   placesSummary: PlaceSummary[]; // Places passées depuis le parent (requis)
-  onRefresh?: () => Promise<void>; // Fonction de rafraîchissement
+  onRefresh?: (skipCache?: boolean) => Promise<void>; // Fonction de rafraîchissement
   refreshing?: boolean; // État de rafraîchissement
   onDeletePlaces?: (placeIds: string[]) => Promise<void>; // Fonction pour supprimer des lieux
   onAddToCollection?: (placeId: string) => void; // Fonction pour ajouter à une collection
@@ -32,7 +32,8 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
 
   const handleRefresh = async () => {
     if (onRefresh) {
-      await onRefresh();
+      // Passer skipCache=true pour le pull-to-refresh manuel
+      await onRefresh(true);
     }
   };
 
@@ -73,7 +74,7 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
               setSelectedPlaceIds(new Set());
               setIsSelectionMode(false);
             } catch (error) {
-              console.error('Erreur lors de la suppression:', error);
+              __DEV__ && console.error('Erreur lors de la suppression:', error);
             } finally {
               setIsDeleting(false);
             }
@@ -83,6 +84,29 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
       { cancelable: true }
     );
   };
+
+  // Mémoriser les callbacks pour éviter les re-renders
+  // IMPORTANT: Les hooks doivent être appelés avant tout early return
+  const renderItem = React.useCallback(({ item }: { item: PlaceSummary }) => {
+    return (
+      <PlaceCard
+        place={item}
+        onPress={() => {
+          if (isSelectionMode) {
+            togglePlaceSelection(item.id);
+          } else {
+            onPlacePress?.(item);
+          }
+        }}
+        isSelectionMode={isSelectionMode}
+        isSelected={selectedPlaceIds.has(item.id)}
+        onAddToCollection={onAddToCollection ? () => onAddToCollection(item.id) : undefined}
+        isInCollection={placesInCollections.has(item.id)}
+      />
+    );
+  }, [isSelectionMode, selectedPlaceIds, onPlacePress, onAddToCollection, placesInCollections, togglePlaceSelection]);
+
+  const keyExtractor = React.useCallback((item: PlaceSummary) => item.id, []);
 
   if (placesSummary.length === 0) {
     return (
@@ -98,23 +122,13 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
   return (
     <FlatList
       data={placesSummary}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <PlaceCard
-          place={item}
-          onPress={() => {
-            if (isSelectionMode) {
-              togglePlaceSelection(item.id);
-            } else {
-              onPlacePress?.(item);
-            }
-          }}
-          isSelectionMode={isSelectionMode}
-          isSelected={selectedPlaceIds.has(item.id)}
-          onAddToCollection={onAddToCollection ? () => onAddToCollection(item.id) : undefined}
-          isInCollection={placesInCollections.has(item.id)}
-        />
-      )}
+      keyExtractor={keyExtractor}
+      renderItem={renderItem}
+      removeClippedSubviews={true}
+      maxToRenderPerBatch={10}
+      updateCellsBatchingPeriod={50}
+      initialNumToRender={10}
+      windowSize={10}
       ListFooterComponent={
         isSelectionMode && selectedPlaceIds.size > 0 ? (
           <View style={styles.footer}>

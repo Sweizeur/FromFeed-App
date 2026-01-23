@@ -13,7 +13,14 @@ interface PlaceCardProps {
   isInCollection?: boolean;
 }
 
-export default function PlaceCard({ place, onPress, isSelectionMode = false, isSelected = false, onAddToCollection, isInCollection = false }: PlaceCardProps) {
+const PlaceCard = React.memo(function PlaceCard({ 
+  place, 
+  onPress, 
+  isSelectionMode = false, 
+  isSelected = false, 
+  onAddToCollection, 
+  isInCollection = false 
+}: PlaceCardProps) {
   const displayName = place.placeName || place.rawTitle || 'Lieu sans nom';
   const displayAddress = place.googleFormattedAddress || place.address || place.city || 'Adresse non disponible';
   const rating = place.googleRating;
@@ -145,7 +152,21 @@ export default function PlaceCard({ place, onPress, isSelectionMode = false, isS
       </View>
     </TouchableOpacity>
   );
-}
+}, (prevProps, nextProps) => {
+  // Comparaison personnalisée pour éviter les re-renders inutiles
+  return (
+    prevProps.place.id === nextProps.place.id &&
+    prevProps.place.placeName === nextProps.place.placeName &&
+    prevProps.place.googlePhotoUrl === nextProps.place.googlePhotoUrl &&
+    prevProps.place.googleRating === nextProps.place.googleRating &&
+    prevProps.place.userRating === nextProps.place.userRating &&
+    prevProps.isSelectionMode === nextProps.isSelectionMode &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isInCollection === nextProps.isInCollection
+  );
+});
+
+export default PlaceCard;
 
 const styles = StyleSheet.create({
   container: {

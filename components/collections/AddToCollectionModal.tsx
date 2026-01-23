@@ -124,7 +124,7 @@ export default function AddToCollectionModal({
           setInitialCollectionIds(initialIds);
           setSelectedCollectionIds(initialIds);
         } catch (error) {
-          console.error('[AddToCollectionModal] Erreur lors du chargement:', error);
+          __DEV__ && console.error('[AddToCollectionModal] Erreur lors du chargement:', error);
         } finally {
           setLoading(false);
         }
@@ -233,7 +233,7 @@ export default function AddToCollectionModal({
       onSuccess?.();
       onClose();
     } catch (error) {
-      console.error('[AddToCollectionModal] Erreur lors de la modification:', error);
+      __DEV__ && console.error('[AddToCollectionModal] Erreur lors de la modification:', error);
       // TODO: Afficher un toast d'erreur
     } finally {
       setSaving(false);

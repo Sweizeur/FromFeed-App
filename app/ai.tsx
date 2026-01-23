@@ -61,7 +61,7 @@ function extractDraftPlan(content: string): { cleanContent: string; draftPlan?: 
       const cleanContent = content.replace(draftPlanRegex, '').trim();
       return { cleanContent: cleanContent, draftPlan };
     } catch (e) {
-      console.error('[AIPage] Erreur lors du parsing du plan temporaire:', e);
+      __DEV__ && console.error('[AIPage] Erreur lors du parsing du plan temporaire:', e);
     }
   }
   
@@ -109,11 +109,11 @@ export default function AIPage() {
               setConversationTitle(cachedTitle);
             }
           } catch (cacheError) {
-            console.error('[AIPage] Erreur lors du chargement du cache:', cacheError);
+            __DEV__ && console.error('[AIPage] Erreur lors du chargement du cache:', cacheError);
           }
         }
       } catch (error) {
-        console.error('[AIPage] Erreur lors du chargement de la conversation:', error);
+        __DEV__ && console.error('[AIPage] Erreur lors du chargement de la conversation:', error);
       }
     };
     loadPersistedConversation();
@@ -147,7 +147,7 @@ export default function AIPage() {
                   JSON.stringify(formattedMessages)
                 );
               } catch (cacheError) {
-                console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
               }
             }
             
@@ -163,13 +163,13 @@ export default function AIPage() {
                     result.conversation.title
                   );
                 } catch (cacheError) {
-                  console.error('[AIPage] Erreur lors de la sauvegarde du titre:', cacheError);
+                  __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du titre:', cacheError);
                 }
               }
             }
           }
         } catch (error) {
-          console.error('[AIPage] Erreur lors du chargement des messages:', error);
+          __DEV__ && console.error('[AIPage] Erreur lors du chargement des messages:', error);
         }
       } else {
         // Si pas de conversationId, réinitialiser les messages et le titre
@@ -226,7 +226,7 @@ export default function AIPage() {
         setConversationTitle(null);
       }
     } catch (cacheError) {
-      console.error('[AIPage] Erreur lors du chargement du cache:', cacheError);
+      __DEV__ && console.error('[AIPage] Erreur lors du chargement du cache:', cacheError);
     }
     
     setConversationId(selectedConversationId);
@@ -234,7 +234,7 @@ export default function AIPage() {
       await AsyncStorage.setItem(CONVERSATION_ID_KEY, selectedConversationId);
       // Les données fraîches seront chargées par le useEffect qui surveille conversationId
     } catch (error) {
-      console.error('[AIPage] Erreur lors de la sauvegarde du conversationId:', error);
+      __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du conversationId:', error);
     }
   };
 
@@ -263,7 +263,7 @@ export default function AIPage() {
           JSON.stringify(messagesWithUser)
         );
       } catch (cacheError) {
-        console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+        __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
       }
     }
 
@@ -325,14 +325,14 @@ export default function AIPage() {
                   clearInterval(checkTitle);
                 }
               } catch (error) {
-                console.error('[AIPage] Erreur lors de la vérification du titre:', error);
+                __DEV__ && console.error('[AIPage] Erreur lors de la vérification du titre:', error);
                 if (attempts >= maxAttempts) {
                   clearInterval(checkTitle);
                 }
               }
             }, 2000);
           } catch (error) {
-            console.error('[AIPage] Erreur lors de la sauvegarde du conversationId:', error);
+            __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du conversationId:', error);
           }
           
           // Mettre à jour le message final avec le draft plan
@@ -349,7 +349,7 @@ export default function AIPage() {
                 getConversationMessagesKey(newConversationId),
                 JSON.stringify(updated)
               ).catch((cacheError) => {
-                console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
               });
             }
             
@@ -360,7 +360,7 @@ export default function AIPage() {
         },
         // onError: Afficher un message d'erreur
         (error: Error) => {
-          console.error('[AIPage] Erreur lors du streaming:', error);
+          __DEV__ && console.error('[AIPage] Erreur lors du streaming:', error);
           setMessages((prev) => {
             const updated = prev.map((msg) =>
               msg.id === aiMessageId
@@ -376,7 +376,7 @@ export default function AIPage() {
         }
       );
     } catch (error) {
-      console.error('[AIPage] Erreur lors de la soumission:', error);
+      __DEV__ && console.error('[AIPage] Erreur lors de la soumission:', error);
       setMessages((prev) => {
         const updated = prev.map((msg) =>
           msg.id === aiMessageId
@@ -406,7 +406,7 @@ export default function AIPage() {
         await AsyncStorage.removeItem(getConversationTitleKey(oldConversationId));
       }
     } catch (error) {
-      console.error('[AIPage] Erreur lors de la suppression du conversationId:', error);
+      __DEV__ && console.error('[AIPage] Erreur lors de la suppression du conversationId:', error);
     }
   };
 
@@ -482,7 +482,7 @@ export default function AIPage() {
                           getConversationMessagesKey(conversationId),
                           JSON.stringify(updated)
                         ).catch((cacheError) => {
-                          console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                          __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
                         });
                       }
                       return updated;
@@ -508,7 +508,7 @@ export default function AIPage() {
                               getConversationMessagesKey(conversationId),
                               JSON.stringify(updated)
                             ).catch((cacheError) => {
-                              console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                              __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
                             });
                           }
                           return updated;
@@ -532,14 +532,14 @@ export default function AIPage() {
                               getConversationMessagesKey(conversationId),
                               JSON.stringify(updated)
                             ).catch((cacheError) => {
-                              console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                              __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
                             });
                           }
                           return updated;
                         });
                       }
                     } catch (error) {
-                      console.error('[AIPage] Erreur lors de la validation du plan:', error);
+                      __DEV__ && console.error('[AIPage] Erreur lors de la validation du plan:', error);
                       // En cas d'erreur, remettre isValidated à false
                       setMessages((prev) => {
                         const updated = prev.map((msg) =>
@@ -558,7 +558,7 @@ export default function AIPage() {
                             getConversationMessagesKey(conversationId),
                             JSON.stringify(updated)
                           ).catch((cacheError) => {
-                            console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                            __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
                           });
                         }
                         return updated;
@@ -585,7 +585,7 @@ export default function AIPage() {
                           getConversationMessagesKey(conversationId),
                           JSON.stringify(updated)
                         ).catch((cacheError) => {
-                          console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                          __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
                         });
                       }
                       return updated;
@@ -610,13 +610,13 @@ export default function AIPage() {
                             getConversationMessagesKey(conversationId),
                             JSON.stringify(updated)
                           ).catch((cacheError) => {
-                            console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                            __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
                           });
                         }
                         return updated;
                       });
                     } catch (error) {
-                      console.error('[AIPage] Erreur lors du rejet du plan:', error);
+                      __DEV__ && console.error('[AIPage] Erreur lors du rejet du plan:', error);
                       // En cas d'erreur, remettre isValidated à false
                       setMessages((prev) => {
                         const updated = prev.map((msg) =>
@@ -635,7 +635,7 @@ export default function AIPage() {
                             getConversationMessagesKey(conversationId),
                             JSON.stringify(updated)
                           ).catch((cacheError) => {
-                            console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
+                            __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
                           });
                         }
                         return updated;
@@ -694,7 +694,7 @@ export default function AIPage() {
                 AsyncStorage.removeItem(getConversationTitleKey(deletedConversationId));
               }
             } catch (error) {
-              console.error('[AIPage] Erreur lors de la suppression du conversationId:', error);
+              __DEV__ && console.error('[AIPage] Erreur lors de la suppression du conversationId:', error);
             }
           }}
         />

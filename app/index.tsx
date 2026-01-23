@@ -82,12 +82,12 @@ export default function SignUpScreen() {
     } catch (error) {
       // Gérer les erreurs réseau de manière plus gracieuse
       if (error instanceof TypeError && error.message === 'Network request failed') {
-        console.error('Erreur réseau lors de la vérification de l\'authentification:', error);
-        console.error('Vérifiez que le backend est accessible et que ngrok est actif');
+        __DEV__ && console.error('Erreur réseau lors de la vérification de l\'authentification:', error);
+        __DEV__ && console.error('Vérifiez que le backend est accessible et que ngrok est actif');
         // Ne pas bloquer l'application en cas d'erreur réseau
         // L'utilisateur pourra toujours essayer de se connecter
       } else {
-        console.error('Erreur lors de la vérification de l\'authentification:', error);
+        __DEV__ && console.error('Erreur lors de la vérification de l\'authentification:', error);
       }
     } finally {
       setCheckingAuth(false);
@@ -111,15 +111,33 @@ export default function SignUpScreen() {
     setLoading(true);
     try {
       const { signInWithGoogle } = await import('@/lib/auth-mobile');
-      const authSession = await signInWithGoogle();
+      const result = await signInWithGoogle();
       
-      // Navigation vers la page home après connexion réussie
-      router.replace('/home');
+      if (result.success && result.data) {
+        // Navigation vers la page home après connexion réussie
+        router.replace('/home');
+      } else {
+        // Gérer les erreurs spécifiques
+        if (result.errorCode === 'RATE_LIMIT') {
+          Alert.alert(
+            'Trop de tentatives',
+            result.errorMessage || 'Vous avez effectué trop de tentatives de connexion. Veuillez patienter quelques instants avant de réessayer.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Erreur de connexion',
+            result.errorMessage || 'Une erreur est survenue lors de la connexion avec Google. Veuillez réessayer.',
+            [{ text: 'OK' }]
+          );
+        }
+      }
     } catch (error: any) {
-      console.error('Erreur lors de la connexion Google:', error);
+      __DEV__ && console.error('Erreur lors de la connexion Google:', error);
       Alert.alert(
         'Erreur de connexion',
-        error.message || 'Une erreur est survenue lors de la connexion avec Google. Veuillez réessayer.'
+        'Une erreur est survenue lors de la connexion avec Google. Veuillez réessayer.',
+        [{ text: 'OK' }]
       );
     } finally {
       setLoading(false);

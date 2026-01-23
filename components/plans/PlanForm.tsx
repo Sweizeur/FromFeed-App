@@ -91,7 +91,7 @@ export default function PlanForm({ plan, initialDate, onClose, onSave }: PlanFor
       const response = await getAllPlacesSummary();
       setAvailablePlaces(response.places);
     } catch (error) {
-      console.error('Erreur lors du chargement des places:', error);
+      __DEV__ && console.error('Erreur lors du chargement des places:', error);
     } finally {
       setIsLoading(false);
     }
@@ -215,7 +215,7 @@ export default function PlanForm({ plan, initialDate, onClose, onSave }: PlanFor
 
       onSave();
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde du plan:', error);
+      __DEV__ && console.error('Erreur lors de la sauvegarde du plan:', error);
     } finally {
       setIsSaving(false);
     }

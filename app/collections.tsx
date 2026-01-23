@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,15 @@ import { getCollections } from '@/lib/api';
 import type { Collection } from '@/types/groups';
 import { darkColor } from '@/constants/theme';
 
+const CLIENT_CACHE_DURATION = 30 * 1000; // 30 secondes
+
+// Cache client en mémoire pour éviter les requêtes multiples
+let collectionsClientCache: {
+  data: Collection[];
+  timestamp: number;
+} | null = null;
+let isLoadingCollectionsRef = false;
+
 interface CollectionsScreenProps {
   activeTab?: string;
   onTabChange?: (tab: string) => void;
@@ -19,34 +28,103 @@ interface CollectionsScreenProps {
 export default function CollectionsScreen({ activeTab: propActiveTab, onTabChange: propOnTabChange }: CollectionsScreenProps = {} as CollectionsScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // Initialiser avec le cache client si disponible (évite l'effet de reload)
+  const [collections, setCollections] = useState<Collection[]>(() => {
+    if (collectionsClientCache && (Date.now() - collectionsClientCache.timestamp) < CLIENT_CACHE_DURATION) {
+      return collectionsClientCache.data;
+    }
+    return [];
+  });
+  
+  // Ne pas afficher le loader si on a déjà des données du cache
+  const [loading, setLoading] = useState(() => {
+    // Si on a des données du cache, ne pas afficher le loader
+    return collections.length === 0;
+  });
   const [refreshing, setRefreshing] = useState(false);
   const [isCreateCollectionModalVisible, setIsCreateCollectionModalVisible] = useState(false);
 
-  // Charger les données
-  const loadData = useCallback(async (showLoading = false) => {
+  // Charger les données depuis l'API (fonction interne)
+  const loadDataFromAPI = useCallback(async (showLoading = false) => {
+    // Éviter les requêtes simultanées multiples
+    if (isLoadingCollectionsRef) {
+      console.log('[CollectionsScreen] Requête déjà en cours, skip...');
+      // Utiliser le cache client si disponible
+      if (collectionsClientCache) {
+        setCollections(collectionsClientCache.data);
+        setLoading(false);
+        setRefreshing(false);
+      }
+      return;
+    }
+
     try {
+      isLoadingCollectionsRef = true;
       if (showLoading) {
         setLoading(true);
       }
       const collectionsData = await getCollections();
-      setCollections(collectionsData.collections as Collection[]);
+      if (!collectionsData) {
+        throw new Error('Impossible de charger les collections');
+      }
+      const collections = collectionsData.collections as Collection[];
+      setCollections(collections);
+      
+      // Mettre à jour le cache client
+      collectionsClientCache = {
+        data: collections,
+        timestamp: Date.now(),
+      };
     } catch (error) {
-      console.error('[CollectionsScreen] Erreur lors du chargement:', error);
+      __DEV__ && console.error('[CollectionsScreen] Erreur lors du chargement:', error);
     } finally {
+      isLoadingCollectionsRef = false;
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
+  // Charger les données (avec gestion du cache)
+  const loadData = useCallback(async (showLoading = false, skipCache = false) => {
+    // Vérifier le cache client si on ne skip pas le cache
+    if (!skipCache && collectionsClientCache) {
+      const cacheAge = Date.now() - collectionsClientCache.timestamp;
+      if (cacheAge < CLIENT_CACHE_DURATION) {
+        console.log('[CollectionsScreen] Utilisation du cache client (âge:', Math.round(cacheAge / 1000), 's)');
+        setCollections(collectionsClientCache.data);
+        setLoading(false);
+        setRefreshing(false);
+        // Ne PAS recharger si le cache est encore valide (évite les requêtes inutiles)
+        // On ne rechargera que si le cache est expiré ou proche de l'expiration
+        return;
+      }
+    }
+
+    // Pas de cache valide ou cache expiré, charger depuis l'API
+    await loadDataFromAPI(showLoading);
+  }, [loadDataFromAPI]);
+
   useEffect(() => {
-    loadData(true);
-  }, [loadData]);
+    // Si on a déjà des données du cache, vérifier si on doit recharger
+    if (collections.length > 0) {
+      // Vérifier si le cache est encore valide
+      if (collectionsClientCache && (Date.now() - collectionsClientCache.timestamp) < CLIENT_CACHE_DURATION) {
+        // Cache encore valide, ne pas recharger
+        return;
+      }
+      // Cache expiré, recharger silencieusement en arrière-plan
+      loadData(false, false).catch(() => {});
+    } else {
+      // Pas de données, charger avec loader
+      loadData(true, false);
+    }
+  }, [loadData, collections.length]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadData(false);
+    // Skip le cache pour le pull-to-refresh manuel
+    await loadData(false, true);
   }, [loadData]);
 
   const handleCollectionPress = useCallback((collectionId: string) => {
@@ -78,8 +156,13 @@ export default function CollectionsScreen({ activeTab: propActiveTab, onTabChang
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
           showsVerticalScrollIndicator={false}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={darkColor}
+            />
+          }
         >
           {/* Bouton créer une collection */}
           <TouchableOpacity

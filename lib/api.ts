@@ -13,11 +13,48 @@ import type {
   CreatePlanRequest,
   UpdatePlanRequest,
 } from '@/types/api';
+import Constants from 'expo-constants';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 /**
+ * Vérifie si on est vraiment en mode développement
+ * --no-dev désactive certaines fonctionnalités mais __DEV__ peut rester true
+ */
+const isDevelopment = () => {
+  // Vérifier plusieurs indicateurs pour être sûr
+  return (
+    __DEV__ &&
+    process.env.NODE_ENV !== 'production' &&
+    !Constants.appOwnership?.includes('expo') &&
+    Constants.executionEnvironment !== 'storeClient'
+  );
+};
+
+/**
+ * Log uniquement en mode développement
+ */
+const devLog = (...args: any[]) => {
+  if (isDevelopment()) {
+    console.log(...args);
+  }
+};
+
+const devError = (...args: any[]) => {
+  if (isDevelopment()) {
+    console.error(...args);
+  }
+};
+
+const devWarn = (...args: any[]) => {
+  if (isDevelopment()) {
+    console.warn(...args);
+  }
+};
+
+/**
  * Effectue une requête API authentifiée
+ * Retourne null en cas d'erreur au lieu de throw pour éviter les crashes
  */
 type ApiRequestOptions = RequestInit & {
   /**
@@ -30,7 +67,7 @@ type ApiRequestOptions = RequestInit & {
 async function apiRequest<T>(
   endpoint: string,
   options: ApiRequestOptions = {}
-): Promise<T> {
+): Promise<T | null> {
   const token = await getStoredToken();
   
   const { timeoutMs = 15000, ...fetchOptions } = options;
@@ -45,7 +82,7 @@ async function apiRequest<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  console.log('[API] Requête vers:', `${BACKEND_URL}${endpoint}`, 'Method:', options.method || 'GET');
+  devLog('[API] Requête vers:', `${BACKEND_URL}${endpoint}`, 'Method:', options.method || 'GET');
   
   // Ajouter les headers ngrok si nécessaire
   if (BACKEND_URL.includes('ngrok')) {
@@ -66,36 +103,37 @@ async function apiRequest<T>(
   } catch (error: any) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
-      throw new Error('Request timeout: Le serveur n\'a pas répondu dans les temps');
+      devError('[API] Timeout:', endpoint);
+      return null;
     }
-    throw error;
+    devError('[API] Erreur réseau:', error);
+    return null;
   }
   
   clearTimeout(timeoutId);
 
-  console.log('[API] Réponse status:', response.status, 'ok:', response.ok);
+  devLog('[API] Réponse status:', response.status, 'ok:', response.ok);
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('[API] Erreur HTTP:', response.status, 'Body:', errorText);
-    let errorData;
-    try {
-      errorData = JSON.parse(errorText);
-    } catch {
-      errorData = { error: errorText || `HTTP error! status: ${response.status}` };
-    }
-    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    devError('[API] Erreur HTTP:', response.status, 'Body:', errorText);
+    return null;
   }
 
-  const data = await response.json();
-  console.log('[API] Réponse JSON reçue');
-  return data;
+  try {
+    const data = await response.json();
+    devLog('[API] Réponse JSON reçue');
+    return data;
+  } catch (parseError) {
+    devError('[API] Erreur parsing JSON:', parseError);
+    return null;
+  }
 }
 
 /**
  * Analyse un lien (TikTok, Instagram) et extrait les informations du lieu
  */
-export async function analyzeLink(url: string): Promise<LinkPreviewResponse> {
+export async function analyzeLink(url: string): Promise<LinkPreviewResponse | null> {
   return apiRequest<LinkPreviewResponse>('/api/link-preview', {
     method: 'POST',
     body: JSON.stringify({ url }),
@@ -108,7 +146,7 @@ export async function analyzeLink(url: string): Promise<LinkPreviewResponse> {
 /**
  * Récupère la liste des places de l'utilisateur
  */
-export async function getUserPlaces(page: number = 1, limit: number = 20): Promise<PlacesResponse> {
+export async function getUserPlaces(page: number = 1, limit: number = 20): Promise<PlacesResponse | null> {
   return apiRequest<PlacesResponse>(`/api/places?page=${page}&limit=${limit}`, {
     method: 'GET',
   });
@@ -117,7 +155,7 @@ export async function getUserPlaces(page: number = 1, limit: number = 20): Promi
 /**
  * Lie une place à l'utilisateur connecté
  */
-export async function linkPlace(placeId: string): Promise<{ success: boolean; message: string }> {
+export async function linkPlace(placeId: string): Promise<{ success: boolean; message: string } | null> {
   return apiRequest<{ success: boolean; message: string }>('/api/link-place', {
     method: 'POST',
     body: JSON.stringify({ placeId }),
@@ -132,7 +170,7 @@ export async function linkPlace(placeId: string): Promise<{ success: boolean; me
  * Les détails complets sont chargés via getPlaceDetails() quand nécessaire
  * @param skipCache Si true, force le bypass du cache Redis (pour reload manuel)
  */
-export async function getAllPlacesSummary(skipCache: boolean = false): Promise<PlacesSummaryResponse> {
+export async function getAllPlacesSummary(skipCache: boolean = false): Promise<PlacesSummaryResponse | null> {
   const url = skipCache ? '/api/places/markers?skipCache=true' : '/api/places/markers';
   return apiRequest<PlacesSummaryResponse>(url, {
     method: 'GET',
@@ -143,7 +181,7 @@ export async function getAllPlacesSummary(skipCache: boolean = false): Promise<P
  * Récupère les détails complets d'une place spécifique
  * Utilisé quand l'utilisateur clique sur un lieu pour voir tous les détails
  */
-export async function getPlaceDetails(placeId: string): Promise<PlaceDetailsResponse> {
+export async function getPlaceDetails(placeId: string): Promise<PlaceDetailsResponse | null> {
   return apiRequest<PlaceDetailsResponse>(`/api/places/${placeId}`, {
     method: 'GET',
   });
@@ -154,7 +192,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetailsResp
  * @param placeId ID du lieu
  * @param rating Note entière de 1 à 5, ou null pour supprimer
  */
-export async function updatePlaceRating(placeId: string, rating: number | null): Promise<{ success: boolean; rating: number | null }> {
+export async function updatePlaceRating(placeId: string, rating: number | null): Promise<{ success: boolean; rating: number | null } | null> {
   return apiRequest<{ success: boolean; rating: number | null }>(`/api/places/${placeId}/rating`, {
     method: 'PATCH',
     body: JSON.stringify({ rating }),
@@ -164,7 +202,7 @@ export async function updatePlaceRating(placeId: string, rating: number | null):
 /**
  * Récupère tous les plans de l'utilisateur
  */
-export async function getPlans(): Promise<{ plans: any[] }> {
+export async function getPlans(): Promise<{ plans: any[] } | null> {
   return apiRequest<{ plans: any[] }>('/api/plans', {
     method: 'GET',
   });
@@ -173,7 +211,7 @@ export async function getPlans(): Promise<{ plans: any[] }> {
 /**
  * Récupère les détails d'un plan spécifique
  */
-export async function getPlan(planId: string): Promise<{ plan: any }> {
+export async function getPlan(planId: string): Promise<{ plan: any } | null> {
   return apiRequest<{ plan: any }>(`/api/plans/${planId}`, {
     method: 'GET',
   });
@@ -192,7 +230,7 @@ export async function createPlan(data: {
     startTime?: string;
     notes?: string;
   }[];
-}): Promise<{ plan: any }> {
+}): Promise<{ plan: any } | null> {
   return apiRequest<{ plan: any }>('/api/plans', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -211,7 +249,7 @@ export async function updatePlan(planId: string, data: {
     startTime?: string;
     notes?: string;
   }[];
-}): Promise<{ plan: any }> {
+}): Promise<{ plan: any } | null> {
   return apiRequest<{ plan: any }>(`/api/plans/${planId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
@@ -221,7 +259,7 @@ export async function updatePlan(planId: string, data: {
 /**
  * Supprime un plan
  */
-export async function deletePlan(planId: string): Promise<{ message: string }> {
+export async function deletePlan(planId: string): Promise<{ message: string } | null> {
   return apiRequest<{ message: string }>(`/api/plans/${planId}`, {
     method: 'DELETE',
   });
@@ -230,7 +268,7 @@ export async function deletePlan(planId: string): Promise<{ message: string }> {
 /**
  * Supprime le lien entre un lieu et l'utilisateur (ne supprime pas le lieu en DB)
  */
-export async function deletePlace(placeId: string): Promise<{ message: string }> {
+export async function deletePlace(placeId: string): Promise<{ message: string } | null> {
   return apiRequest<{ message: string }>(`/api/places/${placeId}`, {
     method: 'DELETE',
   });
@@ -257,14 +295,13 @@ export async function sendAIMessageStreaming(
 ): Promise<void> {
   // Empêcher les appels simultanés
   if (isStreamingActive) {
-    console.warn('[API] Un stream est déjà actif, annulation de la nouvelle requête');
-    onError(new Error('Un stream est déjà en cours'));
+    devWarn('[API] Un stream est déjà actif, annulation de la nouvelle requête');
     return;
   }
 
   const token = await getStoredToken();
   if (!token) {
-    onError(new Error('Token d\'authentification manquant'));
+    devError('[API] Token d\'authentification manquant');
     return;
   }
 
@@ -284,7 +321,7 @@ export async function sendAIMessageStreaming(
   return new Promise((resolve, reject) => {
     try {
       isStreamingActive = true;
-      console.log('[API] Connexion WebSocket:', wsUrl.replace(token, 'TOKEN_HIDDEN'));
+      devLog('[API] Connexion WebSocket:', wsUrl.replace(token, 'TOKEN_HIDDEN'));
 
       // Fermer la connexion précédente si elle existe
       if (currentWebSocket) {
@@ -309,7 +346,7 @@ export async function sendAIMessageStreaming(
       };
 
       ws.onopen = () => {
-        console.log('[API] WebSocket connecté, en attente du message de bienvenue...');
+        devLog('[API] WebSocket connecté, en attente du message de bienvenue...');
         // Ne pas envoyer le message immédiatement, attendre le message "connected"
       };
 
@@ -317,17 +354,15 @@ export async function sendAIMessageStreaming(
         try {
           // Vérifier que les données existent et sont de type string
           if (!event.data || typeof event.data !== 'string') {
-            console.warn('[API] Message WebSocket avec type invalide:', typeof event.data);
+            devWarn('[API] Message WebSocket avec type invalide:', typeof event.data);
             return;
           }
 
           // Limiter la taille pour éviter les attaques DoS
           if (event.data.length > 100000) {
-            console.error('[API] Message WebSocket trop volumineux:', event.data.length);
+            devError('[API] Message WebSocket trop volumineux:', event.data.length);
             cleanup();
-            onError(new Error('Message trop volumineux'));
             ws.close();
-            reject(new Error('Message trop volumineux'));
             return;
           }
 
@@ -336,26 +371,24 @@ export async function sendAIMessageStreaming(
           try {
             data = JSON.parse(event.data);
           } catch (parseError) {
-            console.error('[API] Erreur de parsing JSON:', parseError, 'Data:', event.data.substring(0, 100));
+            devError('[API] Erreur de parsing JSON:', parseError, 'Data:', event.data.substring(0, 100));
             if (!isComplete) {
               cleanup();
-              onError(new Error('Format JSON invalide reçu du serveur'));
               ws.close();
-              reject(parseError);
             }
             return;
           }
 
           // Valider la structure de base
           if (!data || typeof data !== 'object' || !data.type) {
-            console.warn('[API] Message WebSocket sans type:', data);
+            devWarn('[API] Message WebSocket sans type:', data);
             return;
           }
 
           if (data.type === 'connected') {
-            console.log('[API] WebSocket:', data.message);
+            devLog('[API] WebSocket:', data.message);
             // Maintenant que le serveur est prêt, envoyer le message de chat
-            console.log('[API] Envoi du message de chat au serveur...');
+            devLog('[API] Envoi du message de chat au serveur...');
             ws.send(JSON.stringify({
               type: 'chat',
               prompt,
@@ -370,7 +403,7 @@ export async function sendAIMessageStreaming(
               fullResponse += data.content;
               onChunk(data.content);
             } else {
-              console.warn('[API] Chunk sans contenu valide:', data);
+              devWarn('[API] Chunk sans contenu valide:', data);
             }
           } else if (data.type === 'complete') {
             isComplete = true;
@@ -382,47 +415,30 @@ export async function sendAIMessageStreaming(
             resolve();
           } else if (data.type === 'error') {
             cleanup();
-            const errorMessage = typeof data.error === 'string' ? data.error : 'Erreur inconnue';
-            onError(new Error(errorMessage));
             ws.close();
-            reject(new Error(errorMessage));
+            return;
           } else {
-            console.warn('[API] Type de message WebSocket inconnu:', data.type);
+            devWarn('[API] Type de message WebSocket inconnu:', data.type);
           }
         } catch (e) {
-          console.error('[API] Erreur lors du traitement du message WebSocket:', e);
+          devError('[API] Erreur lors du traitement du message WebSocket:', e);
           if (!isComplete) {
             cleanup();
-            onError(new Error('Erreur lors du traitement de la réponse'));
             ws.close();
-            reject(e);
           }
         }
       };
 
       ws.onerror = (error) => {
-        console.error('[API] Erreur WebSocket:', error);
+        devError('[API] Erreur WebSocket:', error);
         if (!isComplete && !resolved) {
           cleanup();
-          onError(new Error('Erreur de connexion WebSocket'));
-          reject(error);
         }
       };
 
       ws.onclose = (event) => {
-        console.log('[API] WebSocket fermé, code:', event.code, 'reason:', event.reason);
+        devLog('[API] WebSocket fermé, code:', event.code, 'reason:', event.reason);
         cleanup();
-        
-        if (!isComplete && !resolved) {
-          if (event.code === 1008) {
-            // Unauthorized
-            onError(new Error('Authentification échouée'));
-          } else if (event.code !== 1000) {
-            // Fermeture anormale
-            onError(new Error('Connexion WebSocket fermée de manière inattendue'));
-          }
-          reject(new Error('Connexion fermée'));
-        }
       };
 
       // Timeout de sécurité (5 minutes)
@@ -430,15 +446,12 @@ export async function sendAIMessageStreaming(
         if (!isComplete && !resolved) {
           cleanup();
           ws.close();
-          onError(new Error('Timeout: la réponse prend trop de temps'));
-          reject(new Error('Timeout'));
         }
       }, 5 * 60 * 1000);
     } catch (error) {
       isStreamingActive = false;
       currentWebSocket = null;
-      onError(error instanceof Error ? error : new Error('Erreur lors de l\'initialisation WebSocket'));
-      reject(error);
+      devError('[API] Erreur lors de l\'initialisation WebSocket:', error);
     }
   });
 }
@@ -451,7 +464,7 @@ export async function sendAIMessageStreaming(
 export async function sendAIMessage(
   prompt: string,
   conversationId?: string
-): Promise<{ success: boolean; response: string; conversationId: string }> {
+): Promise<{ success: boolean; response: string; conversationId: string } | null> {
   return apiRequest<{ success: boolean; response: string; conversationId: string }>('/api/ai/chat', {
     method: 'POST',
     body: JSON.stringify({ prompt, conversationId }),
@@ -465,7 +478,7 @@ export async function validateDraftPlan(
   conversationId: string,
   draftPlan: any,
   messageId?: string
-): Promise<{ success: boolean; plan?: any; error?: string }> {
+): Promise<{ success: boolean; plan?: any; error?: string } | null> {
   return apiRequest<{ success: boolean; plan?: any; error?: string }>('/api/ai/draft-plan/validate', {
     method: 'POST',
     body: JSON.stringify({ conversationId, draftPlan, messageId }),
@@ -478,7 +491,7 @@ export async function validateDraftPlan(
 export async function rejectDraftPlan(
   conversationId: string,
   messageId: string
-): Promise<{ success: boolean; message?: string; error?: string }> {
+): Promise<{ success: boolean; message?: string; error?: string } | null> {
   return apiRequest<{ success: boolean; message?: string; error?: string }>('/api/ai/draft-plan/reject', {
     method: 'POST',
     body: JSON.stringify({ conversationId, messageId }),
@@ -497,7 +510,7 @@ export async function getConversations(): Promise<{
     updatedAt: string;
     _count: { messages: number };
   }>;
-}> {
+} | null> {
   return apiRequest('/api/ai/conversations', {
     method: 'GET',
   });
@@ -520,7 +533,7 @@ export async function getConversation(conversationId: string): Promise<{
       createdAt: string;
     }>;
   };
-}> {
+} | null> {
   return apiRequest(`/api/ai/conversations/${conversationId}`, {
     method: 'GET',
   });
@@ -537,7 +550,7 @@ export async function createConversation(title?: string): Promise<{
     createdAt: string;
     updatedAt: string;
   };
-}> {
+} | null> {
   return apiRequest('/api/ai/conversations', {
     method: 'POST',
     body: JSON.stringify({ title }),
@@ -550,7 +563,7 @@ export async function createConversation(title?: string): Promise<{
 export async function deleteConversation(conversationId: string): Promise<{
   success: boolean;
   message: string;
-}> {
+} | null> {
   return apiRequest(`/api/ai/conversations/${conversationId}`, {
     method: 'DELETE',
   });
@@ -575,7 +588,7 @@ export async function getGroups(): Promise<{
     }>;
     sharedCollectionsCount: number;
   }>;
-}> {
+} | null> {
   return apiRequest('/api/groups', {
     method: 'GET',
   });
@@ -608,7 +621,7 @@ export async function getGroup(groupId: string): Promise<{
       createdAt: string;
     }>;
   };
-}> {
+} | null> {
   return apiRequest(`/api/groups/${groupId}`, {
     method: 'GET',
   });
@@ -637,7 +650,7 @@ export async function createGroup(data: {
     }>;
     sharedCollectionsCount: number;
   };
-}> {
+} | null> {
   return apiRequest('/api/groups', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -666,7 +679,7 @@ export async function updateGroup(groupId: string, data: {
     }>;
     sharedCollectionsCount: number;
   };
-}> {
+} | null> {
   return apiRequest(`/api/groups/${groupId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -676,7 +689,7 @@ export async function updateGroup(groupId: string, data: {
 /**
  * Supprime un groupe
  */
-export async function deleteGroup(groupId: string): Promise<{ message: string }> {
+export async function deleteGroup(groupId: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/groups/${groupId}`, {
     method: 'DELETE',
   });
@@ -685,7 +698,7 @@ export async function deleteGroup(groupId: string): Promise<{ message: string }>
 /**
  * Ajoute un membre à un groupe
  */
-export async function addGroupMember(groupId: string, email: string): Promise<{ message: string }> {
+export async function addGroupMember(groupId: string, email: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/groups/${groupId}/members`, {
     method: 'POST',
     body: JSON.stringify({ email }),
@@ -695,7 +708,7 @@ export async function addGroupMember(groupId: string, email: string): Promise<{ 
 /**
  * Retire un membre d'un groupe
  */
-export async function removeGroupMember(groupId: string, memberId: string): Promise<{ message: string }> {
+export async function removeGroupMember(groupId: string, memberId: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/groups/${groupId}/members/${memberId}`, {
     method: 'DELETE',
   });
@@ -716,7 +729,7 @@ export async function getCollections(): Promise<{
     isPrivate: boolean;
     coverImage?: string | null;
   }>;
-}> {
+} | null> {
   return apiRequest('/api/collections', {
     method: 'GET',
   });
@@ -750,7 +763,7 @@ export async function getCollection(collectionId: string): Promise<{
       name: string;
     }>;
   };
-}> {
+} | null> {
   return apiRequest(`/api/collections/${collectionId}`, {
     method: 'GET',
   });
@@ -778,7 +791,7 @@ export async function createCollection(data: {
     isPrivate: boolean;
     coverImage?: string | null;
   };
-}> {
+} | null> {
   return apiRequest('/api/collections', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -805,7 +818,7 @@ export async function updateCollection(collectionId: string, data: {
     isPrivate: boolean;
     coverImage?: string | null;
   };
-}> {
+} | null> {
   return apiRequest(`/api/collections/${collectionId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -815,7 +828,7 @@ export async function updateCollection(collectionId: string, data: {
 /**
  * Supprime une collection
  */
-export async function deleteCollection(collectionId: string): Promise<{ message: string }> {
+export async function deleteCollection(collectionId: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/collections/${collectionId}`, {
     method: 'DELETE',
   });
@@ -824,7 +837,7 @@ export async function deleteCollection(collectionId: string): Promise<{ message:
 /**
  * Ajoute un lieu à une collection
  */
-export async function addPlaceToCollection(collectionId: string, placeId: string): Promise<{ message: string }> {
+export async function addPlaceToCollection(collectionId: string, placeId: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/collections/${collectionId}/places`, {
     method: 'POST',
     body: JSON.stringify({ placeId }),
@@ -834,7 +847,7 @@ export async function addPlaceToCollection(collectionId: string, placeId: string
 /**
  * Retire un lieu d'une collection
  */
-export async function removePlaceFromCollection(collectionId: string, placeId: string): Promise<{ message: string }> {
+export async function removePlaceFromCollection(collectionId: string, placeId: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/collections/${collectionId}/places/${placeId}`, {
     method: 'DELETE',
   });
@@ -843,7 +856,7 @@ export async function removePlaceFromCollection(collectionId: string, placeId: s
 /**
  * Partage une collection avec un groupe
  */
-export async function shareCollectionWithGroup(collectionId: string, groupId: string): Promise<{ message: string }> {
+export async function shareCollectionWithGroup(collectionId: string, groupId: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/collections/${collectionId}/groups`, {
     method: 'POST',
     body: JSON.stringify({ groupId }),
@@ -853,7 +866,7 @@ export async function shareCollectionWithGroup(collectionId: string, groupId: st
 /**
  * Retire le partage d'une collection avec un groupe
  */
-export async function unshareCollectionFromGroup(collectionId: string, groupId: string): Promise<{ message: string }> {
+export async function unshareCollectionFromGroup(collectionId: string, groupId: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/collections/${collectionId}/groups/${groupId}`, {
     method: 'DELETE',
   });
@@ -864,7 +877,7 @@ export async function unshareCollectionFromGroup(collectionId: string, groupId: 
  */
 export async function getPlaceCollections(placeId: string): Promise<{
   collectionIds: string[];
-}> {
+} | null> {
   return apiRequest(`/api/collections/places/${placeId}`, {
     method: 'GET',
   });

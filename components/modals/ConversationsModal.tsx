@@ -85,7 +85,7 @@ export default function ConversationsModal({
       // Si pas de cache, conversations reste vide (affichage "Aucune conversation")
       // La requête en arrière-plan va mettre à jour quand elle arrive
     } catch (error) {
-      console.error('[ConversationsModal] Erreur lors du chargement du cache:', error);
+      __DEV__ && console.error('[ConversationsModal] Erreur lors du chargement du cache:', error);
     }
   };
 
@@ -101,7 +101,7 @@ export default function ConversationsModal({
         await AsyncStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(result.conversations));
       }
     } catch (error) {
-      console.error('[ConversationsModal] Erreur lors du chargement:', error);
+      __DEV__ && console.error('[ConversationsModal] Erreur lors du chargement:', error);
       // En cas d'erreur, on garde le cache affiché (pas de message d'erreur visible)
     }
   };
@@ -135,7 +135,7 @@ export default function ConversationsModal({
         onRefresh();
       }
     } catch (error) {
-      console.error('[ConversationsModal] Erreur lors de la suppression:', error);
+      __DEV__ && console.error('[ConversationsModal] Erreur lors de la suppression:', error);
       
       // 3. Si l'API échoue, restaurer la conversation dans l'UI
       const restoredConversations = [...updatedConversations, conversationToDelete];

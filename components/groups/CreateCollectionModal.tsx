@@ -154,7 +154,7 @@ export default function CreateCollectionModal({
       onSuccess();
       onClose();
     } catch (error) {
-      console.error('[CreateCollectionModal] Erreur:', error);
+      __DEV__ && console.error('[CreateCollectionModal] Erreur:', error);
       // TODO: Afficher un toast d'erreur
     } finally {
       setIsLoading(false);

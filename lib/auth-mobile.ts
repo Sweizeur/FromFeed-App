@@ -3,6 +3,21 @@ import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+/**
+ * Vérifie si on est vraiment en mode développement
+ * --no-dev désactive certaines fonctionnalités mais __DEV__ peut rester true
+ */
+const isDevelopment = () => {
+  // Vérifier plusieurs indicateurs pour être sûr
+  return (
+    __DEV__ &&
+    process.env.NODE_ENV !== 'production' &&
+    !Constants.appOwnership?.includes('expo') &&
+    Constants.executionEnvironment !== 'storeClient'
+  );
+};
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
@@ -43,6 +58,13 @@ export interface AuthSessionData {
   expiresAt: string;
 }
 
+export interface AuthResult {
+  success: boolean;
+  data?: AuthSessionData;
+  errorCode?: 'RATE_LIMIT' | 'NETWORK_ERROR' | 'INVALID_TOKEN' | 'UNKNOWN';
+  errorMessage?: string;
+}
+
 /**
  * Récupère le token stocké de manière sécurisée
  * Utilise SecureStore (chiffré) au lieu d'AsyncStorage (non chiffré)
@@ -72,7 +94,9 @@ export async function getStoredToken(): Promise<string | null> {
     
     return null;
   } catch (error) {
-    console.error('Error retrieving token from SecureStore:', error);
+    if (isDevelopment()) {
+      console.error('Error retrieving token from SecureStore:', error);
+    }
     return null;
   }
 }
@@ -83,14 +107,17 @@ export async function getStoredToken(): Promise<string | null> {
  */
 export async function storeToken(token: string): Promise<void> {
   if (typeof token !== 'string' || token.length === 0) {
-    console.error('Attempted to store an invalid token:', token);
-    throw new Error('Invalid token provided for storage.');
+    if (isDevelopment()) {
+      console.error('Attempted to store an invalid token:', token);
+    }
+    return;
   }
   try {
     await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
   } catch (error) {
-    console.error('Error storing token in SecureStore:', error);
-    throw error;
+    if (isDevelopment()) {
+      console.error('Error storing token in SecureStore:', error);
+    }
   }
 }
 
@@ -107,7 +134,9 @@ export async function clearToken(): Promise<void> {
     // Supprimer les infos utilisateur d'AsyncStorage (non sensibles mais on nettoie tout)
     await AsyncStorage.removeItem(USER_STORAGE_KEY);
   } catch (error) {
-    console.error('Error clearing token:', error);
+    if (isDevelopment()) {
+      console.error('Error clearing token:', error);
+    }
   }
 }
 
@@ -131,10 +160,20 @@ export async function storeUser(user: AuthUser): Promise<void> {
  * 
  * Avec un build de développement, on utilise les deep links (com.fromfeed.app:/oauth)
  * avec le client OAuth iOS configuré dans Google Cloud Console.
+ * 
+ * Retourne un objet AuthResult avec success/errorCode pour permettre de gérer spécifiquement
+ * les erreurs comme le rate limit (429).
  */
-export async function signInWithGoogle(): Promise<AuthSessionData> {
+export async function signInWithGoogle(): Promise<AuthResult> {
   if (!GOOGLE_CLIENT_ID) {
-    throw new Error('Google Client ID not configured. Please set EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS or EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB in .env');
+    if (isDevelopment()) {
+      console.error('Google Client ID not configured');
+    }
+    return {
+      success: false,
+      errorCode: 'UNKNOWN',
+      errorMessage: 'Configuration manquante',
+    };
   }
 
   // Configuration OAuth pour Google
@@ -161,15 +200,17 @@ export async function signInWithGoogle(): Promise<AuthSessionData> {
     });
   }
 
-  console.log('\n🔐 ========== AUTH DEBUG ==========');
-  console.log('🔐 Mode: Deep Links (Development Build)');
-  console.log('🔐 Platform:', Platform.OS);
-  console.log('🔐 Redirect URI:', redirectURI);
-  console.log('🔐 Google Client ID:', GOOGLE_CLIENT_ID);
-  if (Platform.OS === 'ios') {
-    console.log('🔐 Reverse Client ID:', getReverseClientId(GOOGLE_CLIENT_ID_IOS));
+  if (isDevelopment()) {
+    console.log('\n🔐 ========== AUTH DEBUG ==========');
+    console.log('🔐 Mode: Deep Links (Development Build)');
+    console.log('🔐 Platform:', Platform.OS);
+    console.log('🔐 Redirect URI:', redirectURI);
+    console.log('🔐 Google Client ID:', GOOGLE_CLIENT_ID);
+    if (Platform.OS === 'ios') {
+      console.log('🔐 Reverse Client ID:', getReverseClientId(GOOGLE_CLIENT_ID_IOS));
+    }
+    console.log('🔐 ================================\n');
   }
-  console.log('🔐 ================================\n');
 
   // Générer manuellement le code verifier pour PKCE
   // Format: 43-128 caractères aléatoires en base64url
@@ -203,8 +244,10 @@ export async function signInWithGoogle(): Promise<AuthSessionData> {
     .replace(/=/g, '')
     .substring(0, 128);
 
-  console.log('🔐 Code verifier généré (fallback), longueur:', codeVerifier.length);
-  console.log('🔐 Code verifier (premiers 20 chars):', codeVerifier.substring(0, 20));
+  if (isDevelopment()) {
+    console.log('🔐 Code verifier généré (fallback), longueur:', codeVerifier.length);
+    console.log('🔐 Code verifier (premiers 20 chars):', codeVerifier.substring(0, 20));
+  }
   
   // Note: expo-auth-session générera automatiquement le code challenge avec usePKCE: true
 
@@ -217,7 +260,9 @@ export async function signInWithGoogle(): Promise<AuthSessionData> {
   });
 
   // Lancer le flow OAuth
-  console.log('🔐 Lancement du flow OAuth avec deep links...');
+  if (isDevelopment()) {
+    console.log('🔐 Lancement du flow OAuth avec deep links...');
+  }
 
   let code: string;
   let finalCodeVerifier: string | undefined;
@@ -225,26 +270,46 @@ export async function signInWithGoogle(): Promise<AuthSessionData> {
   try {
     const result = await request.promptAsync(discovery);
 
-    console.log('🔐 Résultat OAuth type:', result.type);
+    if (isDevelopment()) {
+      console.log('🔐 Résultat OAuth type:', result.type);
+    }
     
     if (result.type !== 'success') {
-      console.error('🔐 ❌ OAuth échoué - type:', result.type);
-      if (result.type === 'cancel') {
-        throw new Error('OAuth cancelled by user');
+      if (isDevelopment()) {
+        console.error('🔐 ❌ OAuth échoué - type:', result.type);
       }
-      throw new Error(`OAuth failed: ${result.type}`);
+      if (result.type === 'cancel') {
+        return {
+          success: false,
+          errorCode: 'UNKNOWN',
+          errorMessage: 'Connexion annulée',
+        };
+      }
+      return {
+        success: false,
+        errorCode: 'UNKNOWN',
+        errorMessage: 'Échec de la connexion OAuth',
+      };
     }
 
     // TypeScript: result.type === 'success' garantit que result a une propriété 'params'
     const params = 'params' in result ? result.params : {};
-    console.log('🔐 Résultat params:', JSON.stringify(params, null, 2));
+    if (isDevelopment()) {
+      console.log('🔐 Résultat params:', JSON.stringify(params, null, 2));
+    }
     
     const { code: oauthCode } = params;
     
     if (!oauthCode) {
-      console.error('🔐 ❌ Aucun code dans le résultat');
-      console.error('🔐 ❌ Params disponibles:', Object.keys(params));
-      throw new Error('No code received from OAuth');
+      if (isDevelopment()) {
+        console.error('🔐 ❌ Aucun code dans le résultat');
+        console.error('🔐 ❌ Params disponibles:', Object.keys(params));
+      }
+      return {
+        success: false,
+        errorCode: 'UNKNOWN',
+        errorMessage: 'Aucun code OAuth reçu',
+      };
     }
     
     code = oauthCode;
@@ -253,21 +318,31 @@ export async function signInWithGoogle(): Promise<AuthSessionData> {
     // Si disponible, utiliser celui-là, sinon utiliser le nôtre
     finalCodeVerifier = (request as any).codeVerifier || codeVerifier;
     
-    console.log('🔐 ✅ Code OAuth reçu, longueur:', code.length);
-    console.log('🔐 ✅ Code verifier disponible:', !!finalCodeVerifier);
-    console.log('🔐 ✅ Code verifier source:', (request as any).codeVerifier ? 'expo-auth-session' : 'manuel');
-    console.log('🔐 Redirect URI à envoyer:', redirectURI);
+    if (isDevelopment()) {
+      console.log('🔐 ✅ Code OAuth reçu, longueur:', code.length);
+      console.log('🔐 ✅ Code verifier disponible:', !!finalCodeVerifier);
+      console.log('🔐 ✅ Code verifier source:', (request as any).codeVerifier ? 'expo-auth-session' : 'manuel');
+      console.log('🔐 Redirect URI à envoyer:', redirectURI);
+    }
   } catch (error: any) {
-    console.error('🔐 ❌ Erreur dans promptAsync:', error);
-    console.error('🔐 ❌ Stack:', error.stack);
-    throw error;
+    if (isDevelopment()) {
+      console.error('🔐 ❌ Erreur dans promptAsync:', error);
+      console.error('🔐 ❌ Stack:', error.stack);
+    }
+    return {
+      success: false,
+      errorCode: 'UNKNOWN',
+      errorMessage: 'Erreur lors de la connexion OAuth',
+    };
   }
 
   // Échanger le code contre un token de session Better Auth
   // Le backend échange le code OAuth avec Google et crée une session Better Auth
   // redirectURI sera com.fromfeed.app:/oauth
-  console.log('🔐 Envoi du code au backend...');
-  console.log('🔐 Backend URL:', BACKEND_URL);
+  if (isDevelopment()) {
+    console.log('🔐 Envoi du code au backend...');
+    console.log('🔐 Backend URL:', BACKEND_URL);
+  }
   
   try {
     const response = await fetch(`${BACKEND_URL}/api/auth/mobile/exchange-oauth`, {
@@ -283,23 +358,34 @@ export async function signInWithGoogle(): Promise<AuthSessionData> {
           }),
     });
 
-    console.log('🔐 Réponse backend status:', response.status);
+    if (isDevelopment()) {
+      console.log('🔐 Réponse backend status:', response.status);
+    }
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('🔐 ❌ Erreur backend:', errorText);
-      let error;
-      try {
-        error = JSON.parse(errorText);
-      } catch {
-        error = { error: errorText };
+      // Ne jamais logger en production, même pour le rate limit
+      
+      // Détecter le rate limit (429)
+      if (response.status === 429) {
+        return {
+          success: false,
+          errorCode: 'RATE_LIMIT',
+          errorMessage: 'Trop de tentatives de connexion. Veuillez patienter quelques instants avant de réessayer.',
+        };
       }
-      throw new Error(error.error || `Failed to exchange OAuth code: ${response.status}`);
+      
+      // Autres erreurs HTTP
+      return {
+        success: false,
+        errorCode: response.status >= 500 ? 'NETWORK_ERROR' : 'UNKNOWN',
+        errorMessage: 'Erreur lors de la connexion',
+      };
     }
     
         const authSession: AuthSessionData = await response.json();
         // Logs de debug (désactiver en production)
-        if (__DEV__) {
+        if (isDevelopment()) {
           console.log('🔐 ✅ Session créée avec succès');
           console.log('🔐 ✅ Token reçu:', authSession.token ? `${authSession.token.substring(0, 20)}...` : 'undefined');
           console.log('🔐 ✅ User reçu:', authSession.user?.email || 'undefined');
@@ -307,17 +393,43 @@ export async function signInWithGoogle(): Promise<AuthSessionData> {
     
     // Vérifier que le token est présent
     if (!authSession.token) {
-      throw new Error('Token not received from backend');
+      if (isDevelopment()) {
+        console.error('🔐 ❌ Token not received from backend');
+      }
+      return {
+        success: false,
+        errorCode: 'INVALID_TOKEN',
+        errorMessage: 'Token invalide reçu du serveur',
+      };
     }
     
     // Stocker le token et l'utilisateur
     await storeToken(authSession.token);
     await storeUser(authSession.user);
     
-    return authSession;
+    return {
+      success: true,
+      data: authSession,
+    };
   } catch (error: any) {
-    console.error('🔐 ❌ Erreur lors de l\'échange avec le backend:', error);
-    throw error;
+    if (isDevelopment()) {
+      console.error('🔐 ❌ Erreur lors de l\'échange avec le backend:', error);
+    }
+    
+    // Détecter les erreurs réseau
+    if (error instanceof TypeError && error.message === 'Network request failed') {
+      return {
+        success: false,
+        errorCode: 'NETWORK_ERROR',
+        errorMessage: 'Erreur de connexion réseau',
+      };
+    }
+    
+    return {
+      success: false,
+      errorCode: 'UNKNOWN',
+      errorMessage: 'Erreur lors de la connexion',
+    };
   }
 
 }
@@ -337,7 +449,9 @@ export async function signOut(): Promise<void> {
         },
       });
     } catch (error) {
-      console.error('Error signing out on server:', error);
+      if (isDevelopment()) {
+        console.error('Error signing out on server:', error);
+      }
     }
   }
 
@@ -355,7 +469,9 @@ export async function refreshSession(): Promise<AuthSessionData | null> {
   }
 
   try {
-    console.log('[Auth] Rafraîchissement de la session, URL:', `${BACKEND_URL}/api/auth/mobile/refresh-session`);
+    if (isDevelopment()) {
+      console.log('[Auth] Rafraîchissement de la session, URL:', `${BACKEND_URL}/api/auth/mobile/refresh-session`);
+    }
     
     // Créer un AbortController pour gérer le timeout (compatible React Native)
     const controller = new AbortController();
@@ -378,15 +494,23 @@ export async function refreshSession(): Promise<AuthSessionData | null> {
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        throw new Error('Request timeout: Le serveur n\'a pas répondu dans les temps');
+        if (__DEV__) {
+          console.error('[Auth] Request timeout');
+        }
+        return null;
       }
-      throw error;
+      if (__DEV__) {
+        console.error('[Auth] Network error:', error);
+      }
+      return null;
     }
     
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.warn('[Auth] Session refresh failed, status:', response.status);
+      if (isDevelopment()) {
+        console.warn('[Auth] Session refresh failed, status:', response.status);
+      }
       // Session expirée ou invalide
       await clearToken();
       return null;
@@ -400,15 +524,19 @@ export async function refreshSession(): Promise<AuthSessionData | null> {
   } catch (error) {
     // Gérer les erreurs réseau de manière plus gracieuse
     if (error instanceof TypeError && error.message === 'Network request failed') {
-      console.error('[Auth] Erreur réseau lors du rafraîchissement de la session:', error);
-      console.error('[Auth] Backend URL:', BACKEND_URL);
-      console.error('[Auth] Vérifiez que le backend est accessible et que ngrok est actif');
+      if (isDevelopment()) {
+        console.error('[Auth] Erreur réseau lors du rafraîchissement de la session:', error);
+        console.error('[Auth] Backend URL:', BACKEND_URL);
+        console.error('[Auth] Vérifiez que le backend est accessible et que ngrok est actif');
+      }
       // Ne pas effacer le token en cas d'erreur réseau (l'utilisateur pourrait être hors ligne)
       // Retourner null pour indiquer que la session n'a pas pu être rafraîchie
       return null;
     }
     
-    console.error('[Auth] Erreur lors du rafraîchissement de la session:', error);
+    if (isDevelopment()) {
+      console.error('[Auth] Erreur lors du rafraîchissement de la session:', error);
+    }
     await clearToken();
     return null;
   }

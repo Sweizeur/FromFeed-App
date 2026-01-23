@@ -13,6 +13,14 @@ import { getPlans, type Plan, type PlanActivity } from '@/lib/api';
 import { darkColor } from '@/constants/theme';
 
 const PLANS_CACHE_KEY = '@fromfeed:plans_cache';
+const CLIENT_CACHE_DURATION = 30 * 1000; // 30 secondes
+
+// Cache client en mémoire pour éviter les requêtes multiples
+let plansClientCache: {
+  data: Plan[];
+  timestamp: number;
+} | null = null;
+let isLoadingPlansRef = false;
 
 interface PlansScreenProps {
   activeTab?: string;
@@ -31,7 +39,15 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
     new Date().toISOString().split('T')[0] // Format YYYY-MM-DD
   );
   
-  const [plans, setPlans] = useState<Plan[]>([]);
+  // Initialiser avec le cache client si disponible (évite l'effet de reload)
+  const [plans, setPlans] = useState<Plan[]>(() => {
+    // Vérifier le cache client en mémoire d'abord
+    if (plansClientCache && (Date.now() - plansClientCache.timestamp) < CLIENT_CACHE_DURATION) {
+      return plansClientCache.data;
+    }
+    // Sinon, essayer AsyncStorage (synchrone via une fonction helper)
+    return [];
+  });
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
@@ -49,6 +65,27 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
 
   // Charger les plans depuis le cache
   const loadCachedPlans = async () => {
+    // Si on a déjà des plans (depuis le cache client), vérifier si on doit recharger
+    if (plans.length > 0) {
+      // Vérifier si le cache est encore valide
+      if (plansClientCache && (Date.now() - plansClientCache.timestamp) < CLIENT_CACHE_DURATION) {
+        // Cache encore valide, ne pas recharger
+        return;
+      }
+      // Cache expiré, recharger en arrière-plan
+      loadPlansInBackground().catch(() => {});
+      return;
+    }
+
+    // Vérifier le cache client en mémoire
+    if (plansClientCache && (Date.now() - plansClientCache.timestamp) < CLIENT_CACHE_DURATION) {
+      console.log('[PlansScreen] Utilisation du cache client');
+      setPlans(plansClientCache.data);
+      // Ne PAS recharger si le cache est encore valide (évite les requêtes inutiles)
+      return;
+    }
+
+    // Sinon, utiliser AsyncStorage
     try {
       const cachedData = await AsyncStorage.getItem(PLANS_CACHE_KEY);
       if (cachedData) {
@@ -56,7 +93,7 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
         setPlans(cachedPlans);
       }
     } catch (error) {
-      console.error('[PlansScreen] Erreur lors du chargement du cache:', error);
+      __DEV__ && console.error('[PlansScreen] Erreur lors du chargement du cache:', error);
     }
     // Charger en arrière-plan après avoir affiché le cache
     loadPlansInBackground();
@@ -64,15 +101,29 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
 
   // Charger les plans depuis l'API en arrière-plan (sans loader)
   const loadPlansInBackground = async () => {
+    // Éviter les requêtes simultanées multiples
+    if (isLoadingPlansRef) {
+      console.log('[PlansScreen] Requête déjà en cours, skip...');
+      return;
+    }
+
     try {
+      isLoadingPlansRef = true;
       const response = await getPlans();
       const plansData = response.plans || [];
       // Mettre à jour immédiatement l'affichage
       setPlans(plansData);
-      // Sauvegarder dans le cache
+      // Sauvegarder dans le cache AsyncStorage
       await AsyncStorage.setItem(PLANS_CACHE_KEY, JSON.stringify(plansData));
+      // Mettre à jour le cache client
+      plansClientCache = {
+        data: plansData,
+        timestamp: Date.now(),
+      };
     } catch (error) {
-      console.error('[PlansScreen] Erreur lors du chargement des plans:', error);
+      __DEV__ && console.error('[PlansScreen] Erreur lors du chargement des plans:', error);
+    } finally {
+      isLoadingPlansRef = false;
     }
   };
 

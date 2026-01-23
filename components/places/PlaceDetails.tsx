@@ -58,7 +58,7 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
     } else if (place.canonicalUrl && validateUrl(place.canonicalUrl)) {
       Linking.openURL(place.canonicalUrl);
     } else {
-      console.warn('[SECURITY] Tentative d\'ouverture d\'URL invalide:', websiteUrl || place.canonicalUrl);
+      __DEV__ && console.warn('[SECURITY] Tentative d\'ouverture d\'URL invalide:', websiteUrl || place.canonicalUrl);
     }
   };
 
@@ -106,7 +106,7 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
         await onRatingUpdated();
       }
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de la note:', error);
+      __DEV__ && console.error('Erreur lors de la mise à jour de la note:', error);
       // Restaurer l'ancienne valeur en cas d'erreur
       setUserRating(previousRating);
     } finally {
@@ -275,7 +275,7 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
                 if (video.canonicalUrl && validateUrl(video.canonicalUrl)) {
                   Linking.openURL(video.canonicalUrl);
                 } else {
-                  console.warn('[SECURITY] Tentative d\'ouverture d\'URL invalide:', video.canonicalUrl);
+                  __DEV__ && console.warn('[SECURITY] Tentative d\'ouverture d\'URL invalide:', video.canonicalUrl);
                 }
               };
 

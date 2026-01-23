@@ -87,7 +87,7 @@ export default function CollectionDetailScreen() {
         
         setCollectionPlaces(fullCollectionPlaces);
       } catch (error) {
-        console.error('[CollectionDetail] Erreur lors du chargement:', error);
+        __DEV__ && console.error('[CollectionDetail] Erreur lors du chargement:', error);
         showError('Impossible de charger la collection');
       } finally {
         setLoading(false);
@@ -124,7 +124,7 @@ export default function CollectionDetailScreen() {
       setCollectionPlaces(fullCollectionPlaces);
       placesListKey.current += 1;
     } catch (error) {
-      console.error('[CollectionDetail] Erreur lors du rafraîchissement:', error);
+      __DEV__ && console.error('[CollectionDetail] Erreur lors du rafraîchissement:', error);
     } finally {
       setRefreshing(false);
     }
@@ -151,9 +151,8 @@ export default function CollectionDetailScreen() {
       showSuccess(`${placeIds.length} lieu${placeIds.length > 1 ? 'x' : ''} retiré${placeIds.length > 1 ? 's' : ''} de la collection`);
       await refreshCollection();
     } catch (error) {
-      console.error('[CollectionDetail] Erreur lors de la suppression:', error);
+      __DEV__ && console.error('[CollectionDetail] Erreur lors de la suppression:', error);
       showError('Une erreur est survenue lors de la suppression des lieux.');
-      throw error;
     }
   };
 

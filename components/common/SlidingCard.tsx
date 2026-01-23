@@ -46,6 +46,11 @@ interface SlidingCardProps {
    */
   initialSnapIndex?: number;
   /**
+   * Position translateY initiale à restaurer (pour préserver la position entre les remontages)
+   * Si fourni, a priorité sur initialSnap et initialSnapIndex.
+   */
+  restoreTranslateY?: number | null;
+  /**
    * Activer la détection de fling (vitesse élevée)
    */
   enableFling?: boolean;
@@ -107,6 +112,7 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
   onHeaderLayout,
   initialSnap = 'mid',
   initialSnapIndex,
+  restoreTranslateY,
   enableFling = true,
   velocityFlingThreshold = 300,
   snapPointsVisiblePercents,
@@ -186,10 +192,15 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
   const Ymin = snapPoints.length > 0 ? snapPoints[snapPoints.length - 1] : 0; // Dernier (le plus bas)
 
   // Position animée (offset Y)
-  const translateY = useSharedValue(Ymin ?? 0); // Démarre en bas (ou 0 par défaut)
+  // Si restoreTranslateY est fourni, l'utiliser directement (restauration de position)
+  // Sinon, démarrer en bas (Ymin)
+  const initialY = restoreTranslateY !== undefined && restoreTranslateY !== null 
+    ? restoreTranslateY 
+    : (Ymin ?? 0);
+  const translateY = useSharedValue(initialY);
   const context = useSharedValue({ y: 0 });
   // Position cible pour l'effet de suivi fluide pendant le drag
-  const dragTargetY = useSharedValue(Ymin ?? 0);
+  const dragTargetY = useSharedValue(initialY);
 
   // Callback pour notifier les changements de position
   const notifyPositionChange = React.useCallback((y: number, height: number) => {
@@ -260,11 +271,20 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
   }), [cardH, snapPoints, notifySnapPointReached, findNearestSnap]);
 
   // Réagir aux changements de position pour notifier le parent
+  // Utiliser un throttling pour réduire les appels JS (améliore les FPS)
+  // Initialiser avec la même valeur que translateY (sans utiliser .value pour éviter le warning)
+  const lastNotifiedY = useSharedValue(initialY);
   useAnimatedReaction(
     () => translateY.value,
     (currentY: number) => {
-      if (onPositionChange) {
-        runOnJS(notifyPositionChange)(currentY, cardH);
+      'worklet';
+      // Throttle : notifier seulement si le changement est significatif (> 5px)
+      const diff = Math.abs(currentY - lastNotifiedY.value);
+      if (diff > 5) {
+        lastNotifiedY.value = currentY;
+        if (onPositionChange) {
+          runOnJS(notifyPositionChange)(currentY, cardH);
+        }
       }
     },
     [cardH, onPositionChange]
@@ -283,6 +303,21 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
   // Initialisation : animation de Ymin vers le snap initial
   useEffect(() => {
     if (headerWhiteH > 0 && cardH > 0 && !isInitialized && snapPoints.length > 0) {
+      let targetY: number;
+      
+      // Si restoreTranslateY est fourni, l'utiliser directement (pas d'animation)
+      if (restoreTranslateY !== undefined && restoreTranslateY !== null) {
+        // Valider et clamp le translateY restauré entre Ymax et Ymin
+        targetY = Math.max(Ymax, Math.min(Ymin, restoreTranslateY));
+        // Pas d'animation, positionner directement
+        translateY.value = targetY;
+        setIsInitialized(true);
+        // Notifier que le snap point est atteint
+        runOnJS(notifySnapPointReached)(targetY, cardH);
+        return;
+      }
+      
+      // Sinon, utiliser initialSnapIndex ou initialSnap
       // Déterminer l'index initial
       let index = 0;
       if (typeof initialSnapIndex === 'number') {
@@ -296,7 +331,7 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
           index = Math.floor(snapPoints.length / 2);
         }
       }
-      const targetY = snapPoints[index] ?? Ymin ?? 0;
+      targetY = snapPoints[index] ?? Ymin ?? 0;
       // Petit délai pour que le layout soit stable
       setTimeout(() => {
       translateY.value = withTiming(targetY, {
@@ -311,7 +346,7 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
         setIsInitialized(true);
       }, 100);
     }
-  }, [headerWhiteH, cardH, initialSnap, initialSnapIndex, snapPoints, Ymin, isInitialized]);
+  }, [headerWhiteH, cardH, initialSnap, initialSnapIndex, restoreTranslateY, snapPoints, Ymin, isInitialized, notifySnapPointReached]);
 
   // Trouver le snap suivant dans la direction de la vitesse
   const findNextSnap = React.useCallback((currentY: number, velocityY: number, points: number[]): number => {
@@ -410,12 +445,9 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
       // Mettre à jour la cible avec un léger amortissement pour plus de fluidité
       dragTargetY.value = newY;
       
-      // Suivre la cible avec un spring léger pour un effet fluide
-      translateY.value = withSpring(dragTargetY.value, {
-        damping: 15,
-        stiffness: 150,
-        mass: 0.5,
-      });
+      // Suivre la cible directement pendant le drag (pas de spring pour plus de fluidité)
+      // Le spring est seulement utilisé à la fin du geste
+      translateY.value = dragTargetY.value;
     })
     .onEnd((event) => {
       'worklet';
@@ -517,28 +549,29 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
       });
     });
 
-  // Style animé pour la carte
+  // Style animé pour la carte (optimisé avec 'worklet')
   const animatedStyle = useAnimatedStyle(() => {
+    'worklet';
     return {
       transform: [{ translateY: translateY.value }],
     };
-  });
+  }, []);
 
   // Style animé pour le contenu (ajuster la hauteur en fonction de la position)
+  // Optimisé pour réduire les recalculs
+  const grabberHeight = grabber ? 25 : 0;
   const animatedContentStyle = useAnimatedStyle(() => {
+    'worklet';
     // Calculer la hauteur visible de la carte
     // translateY = 0 => carte à 100% visible (hauteur = cardH)
     // translateY augmente => hauteur visible diminue
     const visibleHeight = cardH - translateY.value;
-    
-    // Soustraire la hauteur du grabber (environ 25px avec les marges)
-    const grabberHeight = grabber ? 25 : 0;
     const contentHeight = Math.max(0, visibleHeight - grabberHeight);
     
     return {
       height: contentHeight, // Hauteur visible du contenu
     };
-  });
+  }, [cardH, grabberHeight]);
 
   // Ne pas rendre si le header n'est pas mesuré
   if (totalHeaderH === 0 && !propHeaderHeight) {

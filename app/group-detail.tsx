@@ -25,7 +25,7 @@ export default function GroupDetailScreen() {
         const response = await getGroup(id);
         setGroup(response.group as Group);
       } catch (error) {
-        console.error('[GroupDetail] Erreur lors du chargement:', error);
+        __DEV__ && console.error('[GroupDetail] Erreur lors du chargement:', error);
       } finally {
         setLoading(false);
       }

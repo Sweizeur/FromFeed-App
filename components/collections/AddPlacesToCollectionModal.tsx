@@ -123,7 +123,7 @@ export default function AddPlacesToCollectionModal({
           );
           setPlaces(availablePlaces);
         } catch (error) {
-          console.error('[AddPlacesToCollectionModal] Erreur lors du chargement:', error);
+          __DEV__ && console.error('[AddPlacesToCollectionModal] Erreur lors du chargement:', error);
         } finally {
           setLoading(false);
         }
@@ -215,7 +215,7 @@ export default function AddPlacesToCollectionModal({
       onSuccess?.();
       onClose();
     } catch (error) {
-      console.error('[AddPlacesToCollectionModal] Erreur lors de l\'ajout:', error);
+      __DEV__ && console.error('[AddPlacesToCollectionModal] Erreur lors de l\'ajout:', error);
     } finally {
       setSaving(false);
     }

@@ -43,7 +43,7 @@ export function useMap() {
       };
       setRegion(initialRegion);
     } catch (error) {
-      console.error('[useMap] Error getting location:', error);
+      __DEV__ && console.error('[useMap] Error getting location:', error);
       setErrorMsg('Unable to get your location.');
     } finally {
       setLoadingLocation(false);
@@ -57,7 +57,7 @@ export function useMap() {
     async (place: Place | PlaceSummary) => {
       // Vérifier que la place est valide et a des coordonnées valides
       if (!place || !place.id) {
-        console.warn('[useMap] Place invalide:', place);
+        __DEV__ && console.warn('[useMap] Place invalide:', place);
         return;
       }
 
@@ -185,7 +185,7 @@ export function useMap() {
           );
         }
       } catch (error) {
-        console.error('[useMap] Erreur lors de la récupération de la caméra:', error);
+        __DEV__ && console.error('[useMap] Erreur lors de la récupération de la caméra:', error);
         // Fallback si getCamera échoue : animation normale
         if (mapViewRef.current) {
           mapViewRef.current.animateToRegion(
