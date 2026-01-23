@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, FlatList, Text, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PlaceSummary } from '@/types/api';
@@ -16,8 +16,12 @@ interface PlacesListProps {
 
 export default function PlacesList({ onPlacePress, placesSummary, onRefresh, refreshing = false, onDeletePlaces, onAddToCollection }: PlacesListProps) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [selectedPlaceIds, setSelectedPlaceIds] = useState<Set<string>>(new Set());
+  // Utiliser un tableau au lieu d'un Set pour une meilleure stabilité
+  const [selectedPlaceIds, setSelectedPlaceIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Convertir en Set pour les vérifications rapides
+  const selectedPlaceIdsSet = useMemo(() => new Set(selectedPlaceIds), [selectedPlaceIds]);
 
   // Utiliser directement les collectionIds depuis les places (plus besoin d'appels API)
   const placesInCollections = useMemo(() => {
@@ -37,25 +41,38 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
     }
   };
 
-  const toggleSelectionMode = () => {
-    setIsSelectionMode(!isSelectionMode);
-    setSelectedPlaceIds(new Set());
-  };
+  const toggleSelectionMode = useCallback(() => {
+    setIsSelectionMode((prev) => {
+      const newMode = !prev;
+      // Réinitialiser la sélection quand on quitte le mode sélection
+      if (!newMode) {
+        setSelectedPlaceIds([]);
+      }
+      return newMode;
+    });
+  }, []);
 
-  const togglePlaceSelection = (placeId: string) => {
-    const newSelected = new Set(selectedPlaceIds);
-    if (newSelected.has(placeId)) {
-      newSelected.delete(placeId);
-    } else {
-      newSelected.add(placeId);
-    }
-    setSelectedPlaceIds(newSelected);
-  };
+  const togglePlaceSelection = useCallback((placeId: string) => {
+    setSelectedPlaceIds((prev) => {
+      const index = prev.indexOf(placeId);
+      if (index > -1) {
+        // Retirer de la sélection
+        return prev.filter((id) => id !== placeId);
+      } else {
+        // Ajouter à la sélection
+        return [...prev, placeId];
+      }
+    });
+  }, []);
 
-  const handleDeleteSelected = () => {
-    if (selectedPlaceIds.size === 0 || !onDeletePlaces) return;
+  const clearSelection = useCallback(() => {
+    setSelectedPlaceIds([]);
+  }, []);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedPlaceIds.length === 0 || !onDeletePlaces) return;
     
-    const count = selectedPlaceIds.size;
+    const count = selectedPlaceIds.length;
     Alert.alert(
       'Supprimer les lieux',
       `Êtes-vous sûr de vouloir supprimer ${count} lieu${count > 1 ? 'x' : ''} de votre liste ?`,
@@ -70,8 +87,8 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
           onPress: async () => {
             setIsDeleting(true);
             try {
-              await onDeletePlaces(Array.from(selectedPlaceIds));
-              setSelectedPlaceIds(new Set());
+              await onDeletePlaces([...selectedPlaceIds]);
+              setSelectedPlaceIds([]);
               setIsSelectionMode(false);
             } catch (error) {
               __DEV__ && console.error('Erreur lors de la suppression:', error);
@@ -83,28 +100,36 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
       ],
       { cancelable: true }
     );
-  };
+  }, [selectedPlaceIds, onDeletePlaces]);
 
   // Mémoriser les callbacks pour éviter les re-renders
   // IMPORTANT: Les hooks doivent être appelés avant tout early return
   const renderItem = React.useCallback(({ item }: { item: PlaceSummary }) => {
+    const isSelected = selectedPlaceIdsSet.has(item.id);
+    
+    const handlePress = () => {
+      if (isSelectionMode) {
+        togglePlaceSelection(item.id);
+      } else {
+        onPlacePress?.(item);
+      }
+    };
+
+    const handleAddToCollection = onAddToCollection 
+      ? () => onAddToCollection(item.id)
+      : undefined;
+
     return (
       <PlaceCard
         place={item}
-        onPress={() => {
-          if (isSelectionMode) {
-            togglePlaceSelection(item.id);
-          } else {
-            onPlacePress?.(item);
-          }
-        }}
+        onPress={handlePress}
         isSelectionMode={isSelectionMode}
-        isSelected={selectedPlaceIds.has(item.id)}
-        onAddToCollection={onAddToCollection ? () => onAddToCollection(item.id) : undefined}
+        isSelected={isSelected}
+        onAddToCollection={handleAddToCollection}
         isInCollection={placesInCollections.has(item.id)}
       />
     );
-  }, [isSelectionMode, selectedPlaceIds, onPlacePress, onAddToCollection, placesInCollections, togglePlaceSelection]);
+  }, [isSelectionMode, selectedPlaceIdsSet, onPlacePress, onAddToCollection, placesInCollections, togglePlaceSelection]);
 
   const keyExtractor = React.useCallback((item: PlaceSummary) => item.id, []);
 
@@ -130,7 +155,7 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
       initialNumToRender={10}
       windowSize={10}
       ListFooterComponent={
-        isSelectionMode && selectedPlaceIds.size > 0 ? (
+        isSelectionMode && selectedPlaceIds.length > 0 ? (
           <View style={styles.footer}>
             <TouchableOpacity
               onPress={handleDeleteSelected}
@@ -140,7 +165,7 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
             >
               <Ionicons name="trash-outline" size={14} color="#FF3B30" />
               <Text style={styles.deleteButtonTextFooter}>
-                {isDeleting ? 'Suppression...' : 'Supprimer'}
+                {isDeleting ? 'Suppression...' : `Supprimer ${selectedPlaceIds.length}`}
               </Text>
             </TouchableOpacity>
           </View>
@@ -159,13 +184,13 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={styles.headerText}>
-                {isSelectionMode && selectedPlaceIds.size > 0
-                  ? `${selectedPlaceIds.size} sélectionné${selectedPlaceIds.size > 1 ? 's' : ''}`
+                {isSelectionMode && selectedPlaceIds.length > 0
+                  ? `${selectedPlaceIds.length} sélectionné${selectedPlaceIds.length > 1 ? 's' : ''}`
                   : `${placesSummary.length} ${placesSummary.length === 1 ? 'lieu sauvegardé' : 'lieux sauvegardés'}`}
               </Text>
-              {isSelectionMode && selectedPlaceIds.size > 0 && (
+              {isSelectionMode && selectedPlaceIds.length > 0 && (
                 <TouchableOpacity
-                  onPress={() => setSelectedPlaceIds(new Set())}
+                  onPress={clearSelection}
                   style={styles.clearSelectionButton}
                   activeOpacity={0.7}
                 >
@@ -174,7 +199,7 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
               )}
             </View>
             <View style={styles.headerRight}>
-              {isSelectionMode && selectedPlaceIds.size > 0 && (
+              {isSelectionMode && selectedPlaceIds.length > 0 && (
                 <TouchableOpacity
                   onPress={handleDeleteSelected}
                   style={[styles.deleteButtonHeader, isDeleting && styles.deleteButtonDisabled]}
