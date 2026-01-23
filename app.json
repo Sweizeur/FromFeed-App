@@ -53,17 +53,8 @@
           }
         }
       ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/images/icon.png",
-          "color": "#1A1A1A",
-          "sounds": []
-        }
-      ],
       "@react-native-community/datetimepicker",
-      "./plugins/with-ats-config.js",
-      "./plugins/with-notifications-entitlements.js"
+      "./plugins/with-ats-config.js"
     ],
     "experiments": {
       "typedRoutes": true,
