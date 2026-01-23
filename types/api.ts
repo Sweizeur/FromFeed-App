@@ -3,7 +3,7 @@
  */
 
 export interface LinkPreviewResponse {
-  place: {
+  place?: {
     name: string;
     address?: string;
     city?: string;
@@ -11,7 +11,7 @@ export interface LinkPreviewResponse {
     source: 'tiktok' | 'instagram';
     url: string;
   };
-  llm: {
+  llm?: {
     hasAddress: boolean;
     address: string | null;
     placeName: string | null;
@@ -21,14 +21,14 @@ export interface LinkPreviewResponse {
     notes: string | null;
     confidence: 'high' | 'medium' | 'low';
   } | null;
-  osm: {
+  osm?: {
     lat: string;
     lon: string;
     display_name: string;
     address?: Record<string, string>;
     [key: string]: any;
   } | null;
-  google: {
+  google?: {
     place_id: string;
     rating?: number;
     user_ratings_total?: number;
@@ -38,7 +38,11 @@ export interface LinkPreviewResponse {
     website?: string;
     [key: string]: any;
   } | null;
-  placeId: string | null;
+  placeId?: string | null;
+  // Réponse asynchrone (traitement en cours)
+  processing?: boolean;
+  success?: boolean;
+  message?: string;
 }
 
 /**

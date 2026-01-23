@@ -112,6 +112,24 @@ export default function HomeScreen() {
   const handleSaveLink = async (result: any) => {
     console.log('Lien analysé avec succès:', result);
     
+    // Vérifier si c'est un traitement asynchrone
+    if (result && 'processing' in result && result.processing === true) {
+      // Le traitement est en cours en arrière-plan
+      showSuccess('Le lien est en cours de traitement. Le lieu sera ajouté automatiquement une fois l\'analyse terminée.');
+      
+      // Rafraîchir la liste après quelques secondes pour voir le nouveau lieu
+      // On fait plusieurs tentatives car le traitement peut prendre du temps
+      const refreshAttempts = [3, 8, 15]; // Rafraîchir après 3s, 8s, et 15s
+      refreshAttempts.forEach((delay) => {
+        setTimeout(async () => {
+          await refreshPlaces(true); // skipCache pour voir le nouveau lieu
+        }, delay * 1000);
+      });
+      
+      return;
+    }
+    
+    // Ancien format de réponse (pour compatibilité)
     // Vérifier si le lieu a bien été créé
     if (!result.placeId) {
       showError('Le lieu n\'a pas pu être ajouté. Les informations extraites ne correspondent pas aux données Google Places.');
@@ -121,9 +139,18 @@ export default function HomeScreen() {
     // Note: La place est déjà liée à l'utilisateur automatiquement par /api/link-preview
     // si l'utilisateur est connecté. Pas besoin d'appeler linkPlace().
     
-    // Afficher un toast de succès
-    const placeName = result.llm?.placeName || result.place?.name || 'Lieu';
-    showSuccess(`${placeName} a été ajouté avec succès !`);
+    // Construire un message de succès informatif
+    const placeName = result.llm?.placeName || result.google?.name || result.place?.name || 'Lieu';
+    const city = result.llm?.city || result.google?.formatted_address?.split(',')[0] || result.place?.city;
+    
+    let successMessage: string;
+    if (city) {
+      successMessage = `Bravo, ${placeName} a été ajouté dans ${city}`;
+    } else {
+      successMessage = `Bravo, ${placeName} a été ajouté dans vos lieux sauvegardés`;
+    }
+    
+    showSuccess(successMessage);
 
     // Rafraîchir toutes les places (avec cache car c'est une action automatique)
     await refreshPlaces(false);

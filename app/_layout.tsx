@@ -6,9 +6,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNotifications } from '@/hooks/useNotifications';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  // Enregistrer le token de notification push au démarrage
+  useNotifications();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

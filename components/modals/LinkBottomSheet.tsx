@@ -226,43 +226,58 @@ export default function LinkBottomSheet({
                 setIsLoading(true);
 
                 try {
-      const result = await analyzeLink(linkInput.trim());
+                  const result = await analyzeLink(linkInput.trim());
 
-      // Vérifier si aucune information utile n'a été récupérée
-      // On considère qu'il n'y a pas d'info si :
-      // - Le LLM n'a rien trouvé (null ou confidence low sans données)
-      // - Pas d'enrichissement OSM
-      // - Pas d'enrichissement Google
-      const hasNoLLMInfo = !result.llm || 
-        (result.llm.confidence === 'low' && 
-         !result.llm.placeName && 
-         !result.llm.address && 
-         !result.llm.city &&
-         !result.llm.country);
-      
-      const hasNoEnrichment = !result.osm && !result.google;
-      
-      // Si pas d'info LLM ET pas d'enrichissement, on considère qu'il n'y a rien
-      if (hasNoLLMInfo && hasNoEnrichment) {
-        const errorMessage = 'Impossible d\'extraire des informations de ce lien. Veuillez vérifier que le lien est valide et contient des informations sur un lieu, puis réessayer.';
-        if (onError) {
-          onError(new Error(errorMessage));
-        }
-        setIsLoading(false);
-        return;
-      }
+                  // Vérifier si c'est une réponse de traitement asynchrone
+                  if (result && 'processing' in result && result.processing === true) {
+                    // Le traitement est en cours en arrière-plan
+                    // Appeler le callback avec le statut de traitement
+                    if (onSaveLink) {
+                      onSaveLink({ processing: true, message: result.message });
+                    }
 
-      // Appeler le callback avec le résultat
-      if (onSaveLink) {
-        onSaveLink(result);
-      }
+                    // Fermer le bottom sheet
+                    onClose();
+                    // Réinitialiser l'input après un court délai
+                    setTimeout(() => {
+                      onLinkInputChange('');
+                    }, 300);
+                    setIsLoading(false);
+                    return;
+                  }
 
-      // Fermer le bottom sheet
-      onClose();
-      // Réinitialiser l'input après un court délai
-      setTimeout(() => {
-        onLinkInputChange('');
-      }, 300);
+                  // Ancien format de réponse (pour compatibilité)
+                  // Vérifier si aucune information utile n'a été récupérée
+                  const hasNoLLMInfo = !result.llm || 
+                    (result.llm.confidence === 'low' && 
+                     !result.llm.placeName && 
+                     !result.llm.address && 
+                     !result.llm.city &&
+                     !result.llm.country);
+                  
+                  const hasNoEnrichment = !result.osm && !result.google;
+                  
+                  // Si pas d'info LLM ET pas d'enrichissement, on considère qu'il n'y a rien
+                  if (hasNoLLMInfo && hasNoEnrichment) {
+                    const errorMessage = 'Impossible d\'extraire des informations de ce lien. Veuillez vérifier que le lien est valide et contient des informations sur un lieu, puis réessayer.';
+                    if (onError) {
+                      onError(new Error(errorMessage));
+                    }
+                    setIsLoading(false);
+                    return;
+                  }
+
+                  // Appeler le callback avec le résultat
+                  if (onSaveLink) {
+                    onSaveLink(result);
+                  }
+
+                  // Fermer le bottom sheet
+                  onClose();
+                  // Réinitialiser l'input après un court délai
+                  setTimeout(() => {
+                    onLinkInputChange('');
+                  }, 300);
                 } catch (err: any) {
                   const errorMessage = err.message || 'Une erreur est survenue lors de l\'analyse du lien.';
                   
