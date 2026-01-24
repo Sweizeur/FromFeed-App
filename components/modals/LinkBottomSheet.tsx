@@ -30,8 +30,9 @@ interface LinkBottomSheetProps {
   onClose: () => void;
   linkInput: string;
   onLinkInputChange: (text: string) => void;
-  onSaveLink?: (result: LinkPreviewResponse) => void;
-  onError?: (error: Error) => void;
+  onSaveLink?: (result: LinkPreviewResponse, pendingId?: string) => void;
+  onError?: (error: Error, pendingId?: string) => void;
+  onBeforeAnalyze?: (url: string) => string | undefined; // Retourne un pendingId si un squelette est ajouté
 }
 
 export default function LinkBottomSheet({
@@ -41,6 +42,7 @@ export default function LinkBottomSheet({
   onLinkInputChange,
   onSaveLink,
   onError,
+  onBeforeAnalyze,
 }: LinkBottomSheetProps) {
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(0);
@@ -224,6 +226,9 @@ export default function LinkBottomSheet({
                 if (!linkInput.trim() || isLoading) return;
 
                 setIsLoading(true);
+                
+                // Ajouter un squelette avant l'analyse si le callback est fourni
+                const pendingId = onBeforeAnalyze?.(linkInput.trim());
 
                 try {
                   const result = await analyzeLink(linkInput.trim());
@@ -231,9 +236,9 @@ export default function LinkBottomSheet({
                   // Vérifier si c'est une réponse de traitement asynchrone
                   if (result && 'processing' in result && result.processing === true) {
                     // Le traitement est en cours en arrière-plan
-                    // Appeler le callback avec le statut de traitement
+                    // Appeler le callback avec le statut de traitement et le pendingId
                     if (onSaveLink) {
-                      onSaveLink({ processing: true, message: result.message });
+                      onSaveLink({ processing: true, message: result.message }, pendingId);
                     }
 
                     // Fermer le bottom sheet
@@ -267,9 +272,9 @@ export default function LinkBottomSheet({
                     return;
                   }
 
-                  // Appeler le callback avec le résultat
+                  // Appeler le callback avec le résultat et le pendingId
                   if (onSaveLink) {
-                    onSaveLink(result);
+                    onSaveLink(result, pendingId);
                   }
 
                   // Fermer le bottom sheet
@@ -281,9 +286,9 @@ export default function LinkBottomSheet({
                 } catch (err: any) {
                   const errorMessage = err.message || 'Une erreur est survenue lors de l\'analyse du lien.';
                   
-                  // Appeler le callback d'erreur si fourni (affichera le toast)
+                  // Appeler le callback d'erreur si fourni (affichera le toast et retirera le squelette)
                   if (onError) {
-                    onError(new Error(errorMessage));
+                    onError(new Error(errorMessage), pendingId);
                   }
                 } finally {
                   setIsLoading(false);

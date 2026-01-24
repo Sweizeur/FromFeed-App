@@ -129,6 +129,15 @@ export interface PlaceSummary {
   collectionIds?: string[]; // IDs des collections contenant ce lieu
 }
 
+/**
+ * Place en attente de traitement (skeleton)
+ */
+export interface PendingPlace {
+  id: string; // ID temporaire unique
+  pending: true; // Flag pour identifier les places en attente
+  url: string; // URL du lien en cours de traitement
+}
+
 export interface PlacesSummaryResponse {
   places: PlaceSummary[];
 }

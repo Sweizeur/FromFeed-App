@@ -6,7 +6,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { Place, PlaceSummary } from '@/types/api';
+import { Place, PlaceSummary, PendingPlace } from '@/types/api';
 import PlacesList from './PlacesList';
 import PlaceDetails from './PlaceDetails';
 
@@ -15,6 +15,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 interface PlaceTransitionProps {
   selectedPlace: Place | null;
   placesSummary: PlaceSummary[];
+  pendingPlaces?: PendingPlace[];
   placesListKey: string | number;
   onPlacePress: (place: Place | PlaceSummary) => void;
   onBack: () => void;
@@ -29,6 +30,7 @@ interface PlaceTransitionProps {
 export default function PlaceTransition({
   selectedPlace,
   placesSummary,
+  pendingPlaces = [],
   placesListKey,
   onPlacePress,
   onBack,
@@ -122,6 +124,7 @@ export default function PlaceTransition({
         <PlacesList
           key={placesListKey}
           placesSummary={placesSummary}
+          pendingPlaces={pendingPlaces}
           onPlacePress={onPlacePress}
           onRefresh={onRefreshPlaces}
           refreshing={refreshingPlaces}

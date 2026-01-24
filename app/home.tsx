@@ -22,9 +22,11 @@ import AddToCollectionModal from '@/components/collections/AddToCollectionModal'
 import PlansScreen from './plans';
 import CollectionsScreen from './collections';
 import { analyzeLink, deletePlace, sendAIMessage, type Place, type PlaceSummary } from '@/lib/api';
+import { PendingPlace } from '@/types/api';
 import { usePlaces } from '@/hooks/usePlaces';
 import { useMap } from '@/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
+import { useShareHandler } from '@/hooks/useShareHandler';
 import { matchesTypeFilter } from '@/utils/typeHierarchy';
 import { darkColor } from '@/constants/theme';
 
@@ -57,6 +59,30 @@ export default function HomeScreen() {
   const [selectedPlaceForCollection, setSelectedPlaceForCollection] = useState<string | null>(null);
   const [linkInput, setLinkInput] = useState('');
   const [activeTab, setActiveTab] = useState('home');
+  
+  // Places en attente de traitement (squelettes)
+  const [pendingPlaces, setPendingPlaces] = useState<PendingPlace[]>([]);
+
+  // Effet pour retirer les squelettes quand les lieux correspondants sont ajoutés
+  React.useEffect(() => {
+    if (pendingPlaces.length === 0 || placesSummary.length === 0) return;
+
+    // Pour chaque place en attente, vérifier si un lieu avec la même URL existe maintenant
+    pendingPlaces.forEach((pending) => {
+      const matchingPlace = placesSummary.find((place) => {
+        // Vérifier si l'URL du lieu correspond à l'URL en attente
+        return place.canonicalUrl === pending.url || 
+               place.canonicalUrl?.includes(pending.url) ||
+               pending.url.includes(place.canonicalUrl || '');
+      });
+
+      if (matchingPlace) {
+        // Le lieu a été ajouté, retirer le squelette
+        console.log('[Home] Lieu détecté, retrait du squelette:', pending.id);
+        removePendingPlace(pending.id);
+      }
+    });
+  }, [placesSummary, pendingPlaces, removePendingPlace]);
   
   // Filtres
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -107,14 +133,36 @@ export default function HomeScreen() {
   }, [loadPlaceDetails, setSelectedPlace, animateToPlace]);
 
   /**
+   * Ajoute une place en attente (squelette)
+   */
+  const addPendingPlace = React.useCallback((url: string): string => {
+    const pendingId = `pending-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const pendingPlace: PendingPlace = {
+      id: pendingId,
+      pending: true,
+      url,
+    };
+    setPendingPlaces((prev) => [...prev, pendingPlace]);
+    return pendingId;
+  }, []);
+
+  /**
+   * Retire une place en attente (squelette)
+   */
+  const removePendingPlace = React.useCallback((pendingId: string) => {
+    setPendingPlaces((prev) => prev.filter((p) => p.id !== pendingId));
+  }, []);
+
+  /**
    * Gère la sauvegarde d'un lien
    */
-  const handleSaveLink = async (result: any) => {
+  const handleSaveLink = async (result: any, pendingId?: string) => {
     console.log('Lien analysé avec succès:', result);
     
     // Vérifier si c'est un traitement asynchrone
     if (result && 'processing' in result && result.processing === true) {
       // Le traitement est en cours en arrière-plan
+      // On garde le squelette jusqu'à ce que le lieu soit ajouté
       showSuccess('Le lien est en cours de traitement. Le lieu sera ajouté automatiquement une fois l\'analyse terminée.');
       
       // Rafraîchir la liste après quelques secondes pour voir le nouveau lieu
@@ -123,10 +171,30 @@ export default function HomeScreen() {
       refreshAttempts.forEach((delay) => {
         setTimeout(async () => {
           await refreshPlaces(true); // skipCache pour voir le nouveau lieu
+          // Vérifier si le lieu a été ajouté (en comparant les IDs)
+          // Si oui, retirer le squelette
+          if (pendingId) {
+            // Le squelette sera retiré automatiquement quand on rafraîchit
+            // car le lieu réel apparaîtra dans la liste
+            // On peut aussi vérifier explicitement si le lieu existe maintenant
+            // Mais pour l'instant, on laisse le polling gérer
+          }
         }, delay * 1000);
       });
       
+      // Retirer le squelette après un délai maximum (au cas où le lieu ne serait jamais ajouté)
+      setTimeout(() => {
+        if (pendingId) {
+          removePendingPlace(pendingId);
+        }
+      }, 20000); // 20 secondes maximum
+      
       return;
+    }
+    
+    // Retirer le squelette si présent (pour les réponses synchrones)
+    if (pendingId) {
+      removePendingPlace(pendingId);
     }
     
     // Ancien format de réponse (pour compatibilité)
@@ -156,10 +224,43 @@ export default function HomeScreen() {
     await refreshPlaces(false);
   };
 
+  // Handler pour les URLs partagées depuis le share sheet
+  // Traite automatiquement le lien sans ouvrir le modal
+  const handleSharedUrl = React.useCallback(async (url: string) => {
+    console.log('[Home] URL partagée reçue, traitement automatique:', url);
+    
+    // Ajouter un squelette immédiatement
+    const pendingId = addPendingPlace(url);
+    
+    try {
+      // Appeler directement l'API pour traiter le lien
+      const result = await analyzeLink(url);
+      
+      if (result) {
+        // Traiter le résultat comme si c'était depuis le modal
+        await handleSaveLink(result, pendingId);
+      } else {
+        removePendingPlace(pendingId);
+        showError('Impossible d\'analyser le lien partagé.');
+      }
+    } catch (error: any) {
+      removePendingPlace(pendingId);
+      console.error('[Home] Erreur lors du traitement automatique du lien partagé:', error);
+      showError(error?.message || 'Une erreur est survenue lors de l\'analyse du lien.');
+    }
+  }, [addPendingPlace, removePendingPlace, showError]);
+
+  // Écouter les URLs partagées
+  useShareHandler(handleSharedUrl);
+
   /**
    * Gère les erreurs lors de l'analyse de lien
    */
-  const handleLinkError = (error: Error) => {
+  const handleLinkError = (error: Error, pendingId?: string) => {
+    // Retirer le squelette en cas d'erreur
+    if (pendingId) {
+      removePendingPlace(pendingId);
+    }
     showError(error.message || 'Une erreur est survenue lors de l\'analyse du lien.');
   };
 
@@ -332,6 +433,7 @@ export default function HomeScreen() {
                 <PlaceTransition
                   selectedPlace={selectedPlace}
                   placesSummary={filteredPlaces}
+                  pendingPlaces={pendingPlaces}
                   placesListKey={placesListKey}
                   onPlacePress={handlePlacePress}
                   onBack={clearSelectedPlace}
@@ -371,6 +473,7 @@ export default function HomeScreen() {
           onLinkInputChange={setLinkInput}
           onSaveLink={handleSaveLink}
           onError={handleLinkError}
+          onBeforeAnalyze={addPendingPlace}
         />
 
 

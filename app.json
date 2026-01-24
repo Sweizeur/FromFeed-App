@@ -54,7 +54,9 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "./plugins/with-ats-config.js"
+      "expo-share-intent",
+      "./plugins/with-ats-config.js",
+      "./plugins/with-share-extension.js"
     ],
     "experiments": {
       "typedRoutes": true,
