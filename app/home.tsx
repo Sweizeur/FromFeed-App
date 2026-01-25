@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,6 +7,7 @@ import {
   Text,
   Keyboard,
   TouchableWithoutFeedback,
+  AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import MapView, { Marker } from 'react-native-maps';
@@ -58,6 +59,9 @@ export default function HomeScreen() {
   const [selectedPlaceForCollection, setSelectedPlaceForCollection] = useState<string | null>(null);
   const [linkInput, setLinkInput] = useState('');
   const [activeTab, setActiveTab] = useState('home');
+  const [isAddingPlace, setIsAddingPlace] = useState(false);
+  const [processingUrl, setProcessingUrl] = useState<string | null>(null);
+  const processingUrlRef = useRef<string | null>(null); // Ref pour éviter les traitements multiples de la même URL
   
   // Filtres
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -113,9 +117,19 @@ export default function HomeScreen() {
   const handleSaveLink = async (result: any) => {
     console.log('Lien analysé avec succès:', result);
     
+    // Vérifier si c'est un traitement asynchrone (ne devrait plus arriver maintenant)
+    if (result && 'processing' in result && result.processing === true) {
+      // Le traitement est en cours en arrière-plan (ancien comportement)
+      showSuccess('Le lien est en cours de traitement. Le lieu sera ajouté automatiquement une fois l\'analyse terminée.');
+      setIsAddingPlace(true);
+      // Le skeleton sera retiré quand le lieu apparaîtra dans la liste
+      return;
+    }
+    
     // Vérifier si le lieu a bien été créé
     if (!result.placeId) {
       showError('Le lieu n\'a pas pu être ajouté. Les informations extraites ne correspondent pas aux données Google Places.');
+      setIsAddingPlace(false);
       return;
     }
     
@@ -136,15 +150,36 @@ export default function HomeScreen() {
     showSuccess(successMessage);
 
     // Rafraîchir silencieusement la liste pour afficher le nouveau lieu
+    // Rafraîchir silencieusement la liste pour afficher le nouveau lieu
     await refreshPlaces(true, true); // skipCache=true pour voir le nouveau lieu, silent=true pour pas de loader
+    
+    // Retirer le skeleton une fois la liste rafraîchie (délai pour que l'animation soit fluide)
+    setTimeout(() => {
+      setIsAddingPlace(false);
+      setProcessingUrl(null);
+      processingUrlRef.current = null;
+    }, 500);
   };
 
   // Handler pour les URLs partagées depuis le share sheet
   // Traite automatiquement le lien sans ouvrir le modal
   const handleSharedUrl = React.useCallback(async (url: string) => {
+    // Éviter de traiter la même URL deux fois
+    if (processingUrlRef.current === url) {
+      console.log('[Home] URL déjà en cours de traitement, ignorée:', url);
+      return;
+    }
+    
     console.log('[Home] URL partagée reçue, traitement automatique:', url);
     
     try {
+      // Marquer cette URL comme en cours de traitement
+      processingUrlRef.current = url;
+      
+      // Afficher le skeleton pendant le traitement
+      setIsAddingPlace(true);
+      setProcessingUrl(url);
+      
       // Appeler directement l'API pour traiter le lien
       const result = await analyzeLink(url);
       
@@ -153,15 +188,78 @@ export default function HomeScreen() {
         await handleSaveLink(result);
       } else {
         showError('Impossible d\'analyser le lien partagé.');
+        setIsAddingPlace(false);
+        setProcessingUrl(null);
+        processingUrlRef.current = null;
       }
     } catch (error: any) {
-      console.error('[Home] Erreur lors du traitement automatique du lien partagé:', error);
-      showError(error?.message || 'Une erreur est survenue lors de l\'analyse du lien.');
+      // Ne pas afficher d'erreur si c'est juste une requête réseau interrompue
+      // (l'utilisateur a peut-être quitté l'app)
+      const isNetworkError = error?.message?.includes('Network request failed') || 
+                            error?.message?.includes('Aborted') ||
+                            error?.name === 'AbortError';
+      
+      if (!isNetworkError) {
+        console.error('[Home] Erreur lors du traitement automatique du lien partagé:', error);
+        showError(error?.message || 'Une erreur est survenue lors de l\'analyse du lien.');
+      } else {
+        console.log('[Home] Requête interrompue (app peut-être en arrière-plan), le lieu sera vérifié au retour');
+      }
+      
+      // Ne pas retirer le skeleton si c'est une erreur réseau
+      // On le retirera quand l'app reviendra au premier plan
+      if (!isNetworkError) {
+        setIsAddingPlace(false);
+        setProcessingUrl(null);
+        processingUrlRef.current = null;
+      }
     }
   }, [showSuccess, showError, refreshPlaces]);
 
   // Écouter les URLs partagées
   useShareHandler(handleSharedUrl);
+
+  // Ref pour éviter les requêtes multiples au retour de l'app
+  const isRefreshingOnAppStateRef = useRef(false);
+
+  // Gérer le retour de l'app au premier plan quand un lieu est en cours d'ajout
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'active' && isAddingPlace && processingUrl) {
+        // Éviter les requêtes multiples
+        if (isRefreshingOnAppStateRef.current) {
+          return;
+        }
+        
+        isRefreshingOnAppStateRef.current = true;
+        
+        try {
+          // Rafraîchir la liste pour voir si le lieu a été ajouté
+          // Gérer les erreurs réseau silencieusement (requêtes interrompues)
+          await refreshPlaces(true, true);
+        } catch (error: any) {
+          // Gérer les erreurs réseau de manière silencieuse
+          const isNetworkError = error?.message?.includes('Network request failed') || 
+                                error?.message?.includes('Aborted') ||
+                                error?.name === 'AbortError';
+          
+          if (!isNetworkError) {
+            console.error('[Home] Erreur lors de la vérification du lieu:', error);
+          }
+          // Ne pas retirer le skeleton ici, attendre la réponse de analyzeLink
+        } finally {
+          // Réinitialiser après un court délai pour permettre un nouveau refresh si nécessaire
+          setTimeout(() => {
+            isRefreshingOnAppStateRef.current = false;
+          }, 1000);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isAddingPlace, processingUrl, refreshPlaces]);
 
   /**
    * Gère les erreurs lors de l'analyse de lien
@@ -351,6 +449,7 @@ export default function HomeScreen() {
                     setSelectedPlaceForCollection(placeId);
                     setIsAddToCollectionModalVisible(true);
                   }}
+                  isAddingPlace={isAddingPlace}
                 />
               </SlidingCard>
             )}
@@ -373,11 +472,58 @@ export default function HomeScreen() {
           onClose={() => {
             setIsLinkModalVisible(false);
             setLinkInput('');
+            // Ne pas retirer le skeleton ici si un traitement est en cours
+            // Il sera retiré dans handleSaveLink une fois terminé
+            if (!isAddingPlace) {
+              setProcessingUrl(null);
+            }
           }}
           linkInput={linkInput}
           onLinkInputChange={setLinkInput}
-          onSaveLink={handleSaveLink}
-          onError={handleLinkError}
+          onStartProcessing={() => {
+            // Afficher le skeleton AVANT le début du traitement
+            setIsAddingPlace(true);
+            // Stocker l'URL en cours de traitement
+            if (linkInput.trim()) {
+              setProcessingUrl(linkInput.trim());
+            }
+          }}
+          onSaveLink={async (result) => {
+            // Stocker l'URL si disponible dans le résultat
+            if (result?.url) {
+              setProcessingUrl(result.url);
+            }
+            try {
+              await handleSaveLink(result);
+            } catch (error: any) {
+              // Gérer les erreurs réseau de manière gracieuse
+              const isNetworkError = error?.message?.includes('Network request failed') || 
+                                    error?.message?.includes('Aborted') ||
+                                    error?.name === 'AbortError';
+              
+              if (!isNetworkError) {
+                // Le skeleton sera retiré dans handleSaveLink après le refresh
+                throw error;
+              } else {
+                // Ne pas retirer le skeleton si c'est une erreur réseau
+                // On le retirera quand l'app reviendra au premier plan
+                console.log('[Home] Requête interrompue depuis le modal, le lieu sera vérifié au retour');
+              }
+            }
+          }}
+          onError={(error) => {
+            const isNetworkError = error?.message?.includes('Network request failed') || 
+                                  error?.message?.includes('Aborted') ||
+                                  error?.name === 'AbortError';
+            
+            if (!isNetworkError) {
+              setIsAddingPlace(false); // Retirer le skeleton en cas d'erreur
+              setProcessingUrl(null);
+              handleLinkError(error);
+            } else {
+              console.log('[Home] Erreur réseau depuis le modal, le lieu sera vérifié au retour');
+            }
+          }}
         />
 
 

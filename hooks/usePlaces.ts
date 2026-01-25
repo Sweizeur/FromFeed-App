@@ -14,6 +14,7 @@ let clientCache: {
 export function usePlaces() {
   // Ref pour éviter les requêtes simultanées multiples
   const isLoadingRef = useRef(false);
+  const isRefreshingRef = useRef(false);
 
   /**
    * Filtre les places pour ne garder que celles avec des coordonnées valides
@@ -125,9 +126,16 @@ export function usePlaces() {
    * @param silent Si true, ne montre pas le loader (pour polling discret)
    */
   const refreshPlaces = useCallback(async (skipCache: boolean = false, silent: boolean = false) => {
+    // Éviter les requêtes multiples simultanées
+    if (isRefreshingRef.current) {
+      console.log('[usePlaces] Rafraîchissement déjà en cours, ignoré');
+      return;
+    }
+
     // Pour refreshPlaces, on force toujours le rechargement (forceRefresh=true)
     // mais on respecte skipCache pour le cache Redis
     try {
+      isRefreshingRef.current = true;
       if (!silent) {
         setRefreshing(true);
       }
@@ -146,7 +154,9 @@ export function usePlaces() {
       setPlacesListKey((prev) => prev + 1); // Forcer le re-render de PlacesList
     } catch (err) {
       __DEV__ && console.error('[usePlaces] Erreur lors du rafraîchissement des places:', err);
+      // Ne pas propager l'erreur pour les erreurs réseau silencieuses
     } finally {
+      isRefreshingRef.current = false;
       if (!silent) {
         setRefreshing(false);
       }

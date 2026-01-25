@@ -24,6 +24,7 @@ interface PlaceTransitionProps {
   onRatingUpdated?: () => void | Promise<void>;
   onDeletePlaces?: (placeIds: string[]) => Promise<void>;
   onAddToCollection?: (placeId: string) => void;
+  isAddingPlace?: boolean;
 }
 
 export default function PlaceTransition({
@@ -38,6 +39,7 @@ export default function PlaceTransition({
   onRatingUpdated,
   onDeletePlaces,
   onAddToCollection,
+  isAddingPlace = false,
 }: PlaceTransitionProps) {
   // Position X pour l'animation de swipe
   const listTranslateX = useSharedValue(0);
@@ -127,6 +129,7 @@ export default function PlaceTransition({
           refreshing={refreshingPlaces}
           onDeletePlaces={onDeletePlaces}
           onAddToCollection={onAddToCollection}
+          isAddingPlace={isAddingPlace}
         />
       </Animated.View>
 

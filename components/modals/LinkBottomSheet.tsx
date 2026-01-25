@@ -32,6 +32,7 @@ interface LinkBottomSheetProps {
   onLinkInputChange: (text: string) => void;
   onSaveLink?: (result: LinkPreviewResponse) => void;
   onError?: (error: Error) => void;
+  onStartProcessing?: () => void; // Callback appelé avant le début du traitement
 }
 
 export default function LinkBottomSheet({
@@ -41,6 +42,7 @@ export default function LinkBottomSheet({
   onLinkInputChange,
   onSaveLink,
   onError,
+  onStartProcessing,
 }: LinkBottomSheetProps) {
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(0);
@@ -224,6 +226,11 @@ export default function LinkBottomSheet({
                 if (!linkInput.trim() || isLoading) return;
 
                 setIsLoading(true);
+                
+                // Notifier le parent que le traitement commence (pour afficher le skeleton)
+                if (onStartProcessing) {
+                  onStartProcessing();
+                }
 
                 try {
                   const result = await analyzeLink(linkInput.trim());
@@ -267,12 +274,17 @@ export default function LinkBottomSheet({
                     return;
                   }
 
-                  // Appeler le callback avec le résultat
+                  // Appeler le callback avec le résultat (asynchrone)
                   if (onSaveLink) {
-                    onSaveLink(result);
+                    // Ne pas attendre la fin du traitement pour fermer le modal
+                    // Le skeleton restera affiché jusqu'à la fin du traitement
+                    onSaveLink(result).catch((err) => {
+                      // L'erreur sera gérée dans onError si nécessaire
+                      console.error('[LinkBottomSheet] Erreur dans onSaveLink:', err);
+                    });
                   }
 
-                  // Fermer le bottom sheet
+                  // Fermer le bottom sheet immédiatement (le skeleton reste affiché)
                   onClose();
                   // Réinitialiser l'input après un court délai
                   setTimeout(() => {

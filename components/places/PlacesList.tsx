@@ -3,6 +3,7 @@ import { View, StyleSheet, FlatList, Text, RefreshControl, TouchableOpacity, Ale
 import { Ionicons } from '@expo/vector-icons';
 import { PlaceSummary } from '@/types/api';
 import PlaceCard from './PlaceCard';
+import PlaceCardSkeleton from './PlaceCardSkeleton';
 import { darkColor } from '@/constants/theme';
 
 interface PlacesListProps {
@@ -12,9 +13,10 @@ interface PlacesListProps {
   refreshing?: boolean; // État de rafraîchissement
   onDeletePlaces?: (placeIds: string[]) => Promise<void>; // Fonction pour supprimer des lieux
   onAddToCollection?: (placeId: string) => void; // Fonction pour ajouter à une collection
+  isAddingPlace?: boolean; // Affiche un skeleton pendant l'ajout d'un lieu
 }
 
-export default function PlacesList({ onPlacePress, placesSummary, onRefresh, refreshing = false, onDeletePlaces, onAddToCollection }: PlacesListProps) {
+export default function PlacesList({ onPlacePress, placesSummary, onRefresh, refreshing = false, onDeletePlaces, onAddToCollection, isAddingPlace = false }: PlacesListProps) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   // Utiliser un tableau au lieu d'un Set pour une meilleure stabilité
   const [selectedPlaceIds, setSelectedPlaceIds] = useState<string[]>([]);
@@ -133,7 +135,32 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
 
   const keyExtractor = React.useCallback((item: PlaceSummary) => item.id, []);
 
-  if (placesSummary.length === 0) {
+  // Ajouter le skeleton comme premier élément si on est en train d'ajouter un lieu
+  const dataWithSkeleton = React.useMemo(() => {
+    if (isAddingPlace) {
+      // Créer un item factice pour le skeleton
+      const skeletonItem = { id: '__skeleton__', __isSkeleton: true } as any;
+      return [skeletonItem, ...placesSummary];
+    }
+    return placesSummary;
+  }, [placesSummary, isAddingPlace]);
+
+  // Render item qui gère à la fois les lieux et le skeleton
+  const renderItemWithSkeleton = React.useCallback(({ item }: { item: PlaceSummary | any }) => {
+    // Si c'est le skeleton, le rendre
+    if (item.__isSkeleton) {
+      return (
+        <View style={styles.skeletonContainer}>
+          <PlaceCardSkeleton />
+        </View>
+      );
+    }
+    
+    // Sinon, rendre le lieu normalement
+    return renderItem({ item });
+  }, [renderItem]);
+
+  if (placesSummary.length === 0 && !isAddingPlace) {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.emptyText}>Aucun lieu sauvegardé</Text>
@@ -146,39 +173,14 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
 
   return (
     <FlatList
-      data={placesSummary}
-      keyExtractor={keyExtractor}
-      renderItem={renderItem}
+      data={dataWithSkeleton}
+      keyExtractor={(item) => item.__isSkeleton ? '__skeleton__' : keyExtractor(item)}
+      renderItem={renderItemWithSkeleton}
       removeClippedSubviews={true}
       maxToRenderPerBatch={10}
       updateCellsBatchingPeriod={50}
       initialNumToRender={10}
       windowSize={10}
-      ListFooterComponent={
-        isSelectionMode && selectedPlaceIds.length > 0 ? (
-          <View style={styles.footer}>
-            <TouchableOpacity
-              onPress={handleDeleteSelected}
-              style={[styles.deleteButtonFooter, isDeleting && styles.deleteButtonDisabled]}
-              disabled={isDeleting}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="trash-outline" size={14} color="#FF3B30" />
-              <Text style={styles.deleteButtonTextFooter}>
-                {isDeleting ? 'Suppression...' : `Supprimer ${selectedPlaceIds.length}`}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : null
-      }
-      contentContainerStyle={styles.listContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor="#1A1A1A"
-        />
-      }
       ListHeaderComponent={
         placesSummary.length > 0 ? (
           <View style={styles.header}>
@@ -221,6 +223,31 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
             </View>
           </View>
         ) : null
+      }
+      ListFooterComponent={
+        isSelectionMode && selectedPlaceIds.length > 0 ? (
+          <View style={styles.footer}>
+            <TouchableOpacity
+              onPress={handleDeleteSelected}
+              style={[styles.deleteButtonFooter, isDeleting && styles.deleteButtonDisabled]}
+              disabled={isDeleting}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={14} color="#FF3B30" />
+              <Text style={styles.deleteButtonTextFooter}>
+                {isDeleting ? 'Suppression...' : `Supprimer ${selectedPlaceIds.length}`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null
+      }
+      contentContainerStyle={styles.listContent}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor="#1A1A1A"
+        />
       }
     />
   );
@@ -334,5 +361,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     letterSpacing: -0.2,
+  },
+  skeletonContainer: {
+    // Pas de padding supplémentaire, le skeleton a déjà le bon style
   },
 });

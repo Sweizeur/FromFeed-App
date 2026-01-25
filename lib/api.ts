@@ -106,7 +106,13 @@ async function apiRequest<T>(
       devError('[API] Timeout:', endpoint);
       return null;
     }
-    devError('[API] Erreur réseau:', error);
+    // Ne pas logger les erreurs réseau "Network request failed" - elles sont attendues
+    // quand l'utilisateur quitte l'app pendant une requête
+    const isNetworkError = error?.message?.includes('Network request failed') || 
+                          error?.name === 'AbortError';
+    if (!isNetworkError) {
+      devError('[API] Erreur réseau:', error);
+    }
     return null;
   }
   
