@@ -122,13 +122,16 @@ export function usePlaces() {
    * Rafraîchit la liste des places
    * @param skipCache Si true, bypass le cache Redis (pour reload manuel uniquement)
    *                  Si false, utilise le cache (pour actions automatiques)
+   * @param silent Si true, ne montre pas le loader (pour polling discret)
    */
-  const refreshPlaces = useCallback(async (skipCache: boolean = false) => {
+  const refreshPlaces = useCallback(async (skipCache: boolean = false, silent: boolean = false) => {
     // Pour refreshPlaces, on force toujours le rechargement (forceRefresh=true)
     // mais on respecte skipCache pour le cache Redis
     try {
-      setRefreshing(true);
-      console.log('[usePlaces] Rafraîchissement des places...', skipCache ? '(skip cache)' : '(avec cache)');
+      if (!silent) {
+        setRefreshing(true);
+      }
+      console.log('[usePlaces] Rafraîchissement des places...', skipCache ? '(skip cache)' : '(avec cache)', silent ? '(silent)' : '');
       
       const response = await getAllPlacesSummary(skipCache);
       const validPlaces = filterValidPlaces(response.places);
@@ -144,7 +147,9 @@ export function usePlaces() {
     } catch (err) {
       __DEV__ && console.error('[usePlaces] Erreur lors du rafraîchissement des places:', err);
     } finally {
-      setRefreshing(false);
+      if (!silent) {
+        setRefreshing(false);
+      }
     }
   }, [filterValidPlaces]);
 

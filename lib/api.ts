@@ -178,6 +178,15 @@ export async function getAllPlacesSummary(skipCache: boolean = false): Promise<P
 }
 
 /**
+ * Récupère le nombre de lieux (endpoint léger pour polling discret)
+ */
+export async function getPlacesCount(): Promise<{ count: number } | null> {
+  return apiRequest<{ count: number }>('/api/places/count', {
+    method: 'GET',
+  });
+}
+
+/**
  * Récupère les détails complets d'une place spécifique
  * Utilisé quand l'utilisateur clique sur un lieu pour voir tous les détails
  */

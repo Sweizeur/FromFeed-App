@@ -1,24 +1,20 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, FlatList, Text, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PlaceSummary, PendingPlace } from '@/types/api';
+import { PlaceSummary } from '@/types/api';
 import PlaceCard from './PlaceCard';
-import PlaceSkeleton from './PlaceSkeleton';
 import { darkColor } from '@/constants/theme';
-
-type PlaceListItem = PlaceSummary | PendingPlace;
 
 interface PlacesListProps {
   onPlacePress?: (place: PlaceSummary) => void;
   placesSummary: PlaceSummary[]; // Places passées depuis le parent (requis)
-  pendingPlaces?: PendingPlace[]; // Places en attente de traitement (squelettes)
   onRefresh?: (skipCache?: boolean) => Promise<void>; // Fonction de rafraîchissement
   refreshing?: boolean; // État de rafraîchissement
   onDeletePlaces?: (placeIds: string[]) => Promise<void>; // Fonction pour supprimer des lieux
   onAddToCollection?: (placeId: string) => void; // Fonction pour ajouter à une collection
 }
 
-export default function PlacesList({ onPlacePress, placesSummary, pendingPlaces = [], onRefresh, refreshing = false, onDeletePlaces, onAddToCollection }: PlacesListProps) {
+export default function PlacesList({ onPlacePress, placesSummary, onRefresh, refreshing = false, onDeletePlaces, onAddToCollection }: PlacesListProps) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   // Utiliser un tableau au lieu d'un Set pour une meilleure stabilité
   const [selectedPlaceIds, setSelectedPlaceIds] = useState<string[]>([]);
@@ -26,12 +22,6 @@ export default function PlacesList({ onPlacePress, placesSummary, pendingPlaces 
 
   // Convertir en Set pour les vérifications rapides
   const selectedPlaceIdsSet = useMemo(() => new Set(selectedPlaceIds), [selectedPlaceIds]);
-
-  // Combiner les places normales et les places en attente
-  // Les places en attente sont affichées en premier
-  const allPlaces: PlaceListItem[] = useMemo(() => {
-    return [...pendingPlaces, ...placesSummary];
-  }, [pendingPlaces, placesSummary]);
 
   // Utiliser directement les collectionIds depuis les places (plus besoin d'appels API)
   const placesInCollections = useMemo(() => {
@@ -114,43 +104,36 @@ export default function PlacesList({ onPlacePress, placesSummary, pendingPlaces 
 
   // Mémoriser les callbacks pour éviter les re-renders
   // IMPORTANT: Les hooks doivent être appelés avant tout early return
-  const renderItem = React.useCallback(({ item }: { item: PlaceListItem }) => {
-    // Si c'est une place en attente, afficher le squelette
-    if ('pending' in item && item.pending) {
-      return <PlaceSkeleton url={item.url} />;
-    }
-
-    // Sinon, c'est une place normale
-    const place = item as PlaceSummary;
-    const isSelected = selectedPlaceIdsSet.has(place.id);
+  const renderItem = React.useCallback(({ item }: { item: PlaceSummary }) => {
+    const isSelected = selectedPlaceIdsSet.has(item.id);
     
     const handlePress = () => {
       if (isSelectionMode) {
-        togglePlaceSelection(place.id);
+        togglePlaceSelection(item.id);
       } else {
-        onPlacePress?.(place);
+        onPlacePress?.(item);
       }
     };
 
     const handleAddToCollection = onAddToCollection 
-      ? () => onAddToCollection(place.id)
+      ? () => onAddToCollection(item.id)
       : undefined;
 
     return (
       <PlaceCard
-        place={place}
+        place={item}
         onPress={handlePress}
         isSelectionMode={isSelectionMode}
         isSelected={isSelected}
         onAddToCollection={handleAddToCollection}
-        isInCollection={placesInCollections.has(place.id)}
+        isInCollection={placesInCollections.has(item.id)}
       />
     );
   }, [isSelectionMode, selectedPlaceIdsSet, onPlacePress, onAddToCollection, placesInCollections, togglePlaceSelection]);
 
-  const keyExtractor = React.useCallback((item: PlaceListItem) => item.id, []);
+  const keyExtractor = React.useCallback((item: PlaceSummary) => item.id, []);
 
-  if (allPlaces.length === 0) {
+  if (placesSummary.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.emptyText}>Aucun lieu sauvegardé</Text>
@@ -163,7 +146,7 @@ export default function PlacesList({ onPlacePress, placesSummary, pendingPlaces 
 
   return (
     <FlatList
-      data={allPlaces}
+      data={placesSummary}
       keyExtractor={keyExtractor}
       renderItem={renderItem}
       removeClippedSubviews={true}
@@ -197,13 +180,13 @@ export default function PlacesList({ onPlacePress, placesSummary, pendingPlaces 
         />
       }
       ListHeaderComponent={
-        allPlaces.length > 0 ? (
+        placesSummary.length > 0 ? (
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={styles.headerText}>
                 {isSelectionMode && selectedPlaceIds.length > 0
                   ? `${selectedPlaceIds.length} sélectionné${selectedPlaceIds.length > 1 ? 's' : ''}`
-                  : `${placesSummary.length} ${placesSummary.length === 1 ? 'lieu sauvegardé' : 'lieux sauvegardés'}${pendingPlaces.length > 0 ? ` (${pendingPlaces.length} en cours)` : ''}`}
+                  : `${placesSummary.length} ${placesSummary.length === 1 ? 'lieu sauvegardé' : 'lieux sauvegardés'}`}
               </Text>
               {isSelectionMode && selectedPlaceIds.length > 0 && (
                 <TouchableOpacity
