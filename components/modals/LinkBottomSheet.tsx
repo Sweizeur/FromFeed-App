@@ -212,7 +212,7 @@ export default function LinkBottomSheet({
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="url"
-                autoFocus
+                autoFocus={visible}
                 editable={!isLoading}
               />
             </View>
