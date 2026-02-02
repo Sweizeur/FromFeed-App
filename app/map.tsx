@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useRef, useEffect, Suspense, lazy, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,6 +9,7 @@ import {
   TouchableWithoutFeedback,
   AppState,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +23,12 @@ import PlaceTransition from '@/components/places/PlaceTransition';
 import AddToCollectionModal from '@/components/collections/AddToCollectionModal';
 import PlansScreen from './plans';
 import CollectionsScreen from './collections';
-import { analyzeLink, deletePlace, type Place, type PlaceSummary } from '@/lib/api';
+import { createLinkPreviewTask, getTaskStatus, deletePlace, type Place, type PlaceSummary } from '@/lib/api';
+
+const PENDING_LINK_TASK_ID = '@fromfeed:pendingLinkTaskId';
+// Polling avec backoff : 1s, 2s, 4s, 8s, 10s puis 10s (max 10–15s entre deux polls)
+const POLL_INTERVALS = [1000, 2000, 4000, 8000, 10000];
+const POLL_MAX_MS = 5 * 60 * 1000;
 import { usePlaces } from '@/hooks/usePlaces';
 import { useMap } from '@/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
@@ -90,7 +96,10 @@ export default function MapScreen() {
   const [activeTab, setActiveTab] = useState('map');
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [processingUrl, setProcessingUrl] = useState<string | null>(null);
+  const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const processingUrlRef = useRef<string | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollStartRef = useRef<number>(0);
 
   // Filtres
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -124,13 +133,25 @@ export default function MapScreen() {
     }
   }, [loadPlaceDetails, setSelectedPlace, animateToPlace]);
 
-  const handleSaveLink = async (result: any) => {
+  const clearPendingTask = useCallback(() => {
+    setPendingTaskId(null);
+    setIsAddingPlace(false);
+    setProcessingUrl(null);
+    processingUrlRef.current = null;
+    AsyncStorage.removeItem(PENDING_LINK_TASK_ID);
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleSaveLink = useCallback(async (result: any) => {
     if (result && 'processing' in result && result.processing === true) {
       showSuccess('Le lien est en cours de traitement. Le lieu sera ajouté automatiquement une fois l\'analyse terminée.');
       setIsAddingPlace(true);
       return;
     }
-    if (!result.placeId) {
+    if (!result?.placeId) {
       showError('Le lieu n\'a pas pu être ajouté. Les informations extraites ne correspondent pas aux données Google Places.');
       setIsAddingPlace(false);
       return;
@@ -147,20 +168,86 @@ export default function MapScreen() {
       setProcessingUrl(null);
       processingUrlRef.current = null;
     }, 500);
-  };
+  }, [showSuccess, showError, refreshPlaces]);
+
+  const checkTaskStatus = useCallback(async (taskId: string) => {
+    const statusRes = await getTaskStatus(taskId);
+    if (!statusRes) return false;
+    if (statusRes.status === 'done' && statusRes.result) {
+      await handleSaveLink(statusRes.result);
+      clearPendingTask();
+      return true;
+    }
+    if (statusRes.status === 'failed' || statusRes.status === 'expired') {
+      showError(statusRes.error || 'L\'analyse du lien a échoué.');
+      clearPendingTask();
+      return true;
+    }
+    return false;
+  }, [handleSaveLink, clearPendingTask, showError]);
+
+  const scheduleNextPoll = useCallback((taskId: string, attempt: number) => {
+    if (pollTimeoutRef.current) return;
+    const elapsed = Date.now() - pollStartRef.current;
+    if (elapsed >= POLL_MAX_MS) {
+      showError('L\'analyse prend trop de temps. Réessayez plus tard.');
+      clearPendingTask();
+      return;
+    }
+    const delay = attempt < POLL_INTERVALS.length ? POLL_INTERVALS[attempt] : 10000;
+    pollTimeoutRef.current = setTimeout(async () => {
+      pollTimeoutRef.current = null;
+      const done = await checkTaskStatus(taskId);
+      if (!done) scheduleNextPoll(taskId, attempt + 1);
+    }, delay);
+  }, [checkTaskStatus, clearPendingTask, showError]);
+
+  const handleTaskCreated = useCallback((taskId: string) => {
+    setPendingTaskId(taskId);
+    setIsAddingPlace(true);
+    setProcessingUrl('En cours...');
+    processingUrlRef.current = 'pending';
+    AsyncStorage.setItem(PENDING_LINK_TASK_ID, taskId);
+    pollStartRef.current = Date.now();
+    scheduleNextPoll(taskId, 0);
+  }, [scheduleNextPoll]);
+
+  useEffect(() => {
+    if (!pendingTaskId) return;
+    return () => {
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+    };
+  }, [pendingTaskId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const stored = await AsyncStorage.getItem(PENDING_LINK_TASK_ID);
+      if (cancelled || !stored) return;
+      setPendingTaskId(stored);
+      setIsAddingPlace(true);
+      setProcessingUrl('En cours...');
+      processingUrlRef.current = 'pending';
+      pollStartRef.current = Date.now();
+      scheduleNextPoll(stored, 0);
+    })();
+    return () => { cancelled = true; };
+  }, [scheduleNextPoll]);
 
   const handleSharedUrl = React.useCallback(async (url: string) => {
     if (processingUrlRef.current === url) return;
     try {
       processingUrlRef.current = url;
-      setIsAddingPlace(true);
-      setProcessingUrl(url);
-      const result = await analyzeLink(url);
-      if (result) await handleSaveLink(result);
-      else {
-        showError('Impossible d\'analyser le lien partagé.');
-        setIsAddingPlace(false);
-        setProcessingUrl(null);
+      const response = await createLinkPreviewTask(url);
+      if (response?.taskId) {
+        setPendingTaskId(response.taskId);
+        setIsAddingPlace(true);
+        setProcessingUrl(url);
+        AsyncStorage.setItem(PENDING_LINK_TASK_ID, response.taskId);
+        pollStartRef.current = Date.now();
+        scheduleNextPoll(response.taskId, 0);
+      } else {
+        showError('Impossible de lancer l\'analyse du lien partagé.');
         processingUrlRef.current = null;
       }
     } catch (error: any) {
@@ -170,20 +257,39 @@ export default function MapScreen() {
         console.error('[Map] Erreur lors du traitement automatique du lien partagé:', error);
         showError(error?.message || 'Une erreur est survenue lors de l\'analyse du lien.');
       }
-      if (!isNetworkError) {
-        setIsAddingPlace(false);
-        setProcessingUrl(null);
-        processingUrlRef.current = null;
-      }
+      processingUrlRef.current = null;
     }
-  }, [showSuccess, showError, refreshPlaces]);
+  }, [showError, scheduleNextPoll]);
 
   useShareHandler(handleSharedUrl);
 
   const isRefreshingOnAppStateRef = useRef(false);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
-      if (nextAppState === 'active' && isAddingPlace && processingUrl) {
+      if (nextAppState !== 'active') return;
+      const taskId = pendingTaskId ?? (await AsyncStorage.getItem(PENDING_LINK_TASK_ID));
+      if (taskId) {
+        if (isRefreshingOnAppStateRef.current) return;
+        isRefreshingOnAppStateRef.current = true;
+        try {
+          const done = await checkTaskStatus(taskId);
+          if (done) {
+            await refreshPlaces(true, true);
+          } else {
+            // Encore en cours → relancer le polling
+            setPendingTaskId(taskId);
+            setIsAddingPlace(true);
+            setProcessingUrl('En cours...');
+            pollStartRef.current = Date.now();
+            scheduleNextPoll(taskId, 0);
+          }
+        } catch (_) {}
+        finally {
+          setTimeout(() => { isRefreshingOnAppStateRef.current = false; }, 1000);
+        }
+        return;
+      }
+      if (isAddingPlace && processingUrl) {
         if (isRefreshingOnAppStateRef.current) return;
         isRefreshingOnAppStateRef.current = true;
         try {
@@ -195,7 +301,7 @@ export default function MapScreen() {
       }
     });
     return () => subscription.remove();
-  }, [isAddingPlace, processingUrl, refreshPlaces]);
+  }, [pendingTaskId, isAddingPlace, processingUrl, refreshPlaces, checkTaskStatus, scheduleNextPoll]);
 
   const handleLinkError = (error: Error) => {
     showError(error.message || 'Une erreur est survenue lors de l\'analyse du lien.');
@@ -254,6 +360,7 @@ export default function MapScreen() {
             selectedType={selectedType}
             onCategoryChange={handleCategoryChange}
             onTypeChange={setSelectedType}
+            onlyFilters={activeTab === 'search'}
           />
         )}
 
@@ -331,7 +438,7 @@ export default function MapScreen() {
 
         {/* Onglet Recherche - fil TikTok (lazy + ErrorBoundary pour WebView) */}
         {activeTab === 'search' && (
-          <View style={styles.searchTabContent}>
+          <View style={[styles.searchTabContent, { paddingBottom: BOTTOM_NAV_HEIGHT + insets.bottom }]}>
             <TikTokFeedErrorBoundary>
               <Suspense fallback={
                 <View style={styles.centered}>
@@ -365,19 +472,10 @@ export default function MapScreen() {
           }}
           linkInput={linkInput}
           onLinkInputChange={setLinkInput}
+          onTaskCreated={handleTaskCreated}
           onStartProcessing={() => {
             setIsAddingPlace(true);
             if (linkInput.trim()) setProcessingUrl(linkInput.trim());
-          }}
-          onSaveLink={async (result) => {
-            if (result?.url) setProcessingUrl(result.url);
-            try {
-              await handleSaveLink(result);
-            } catch (error: any) {
-              const isNetworkError = error?.message?.includes('Network request failed') ||
-                error?.message?.includes('Aborted') || error?.name === 'AbortError';
-              if (!isNetworkError) throw error;
-            }
           }}
           onError={(error) => {
             const isNetworkError = error?.message?.includes('Network request failed') ||

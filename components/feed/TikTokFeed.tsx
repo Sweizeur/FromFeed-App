@@ -23,12 +23,78 @@ interface TikTokFeedProps {
   selectedType: string | null;
 }
 
-function TikTokEmbedBlock({ video }: { video: PlaceVideoFeedItem }) {
-  const embedUri = `https://www.tiktok.com/embed/v2/${video.videoId}`;
+const TIKTOK_PLAY_MESSAGE = JSON.stringify({
+  type: 'play',
+  value: null,
+  'x-tiktok-player': true,
+});
+const TIKTOK_PAUSE_MESSAGE = JSON.stringify({
+  type: 'pause',
+  value: null,
+  'x-tiktok-player': true,
+});
+
+function TikTokEmbedBlock({
+  video,
+  isActive,
+}: {
+  video: PlaceVideoFeedItem;
+  isActive: boolean;
+}) {
+  const webViewRef = React.useRef<WebView>(null);
+  const hasLoadedRef = React.useRef(false);
+  const isActiveRef = React.useRef(isActive);
+  isActiveRef.current = isActive;
+  // Embed Player officiel TikTok (player/v1) — autoplay seulement quand la carte est visible
+  const embedUri = `https://www.tiktok.com/player/v1/${video.videoId}?loop=1&play_button=0`;
+
+  const injectPlay = useCallback(() => {
+    webViewRef.current?.injectJavaScript(
+      `(function(){
+        function setPlaysInline(){
+          var v=document.querySelectorAll('video');
+          for(var i=0;i<v.length;i++){
+            v[i].setAttribute('playsinline','true');
+            v[i].setAttribute('webkit-playsinline','true');
+            v[i].playsInline=true;
+          }
+        }
+        try {
+          setPlaysInline();
+          var m=${TIKTOK_PLAY_MESSAGE};
+          window.postMessage(m,'*');
+          setTimeout(setPlaysInline, 400);
+        }catch(e){}
+      })();true;`
+    );
+  }, []);
+
+  const injectPause = useCallback(() => {
+    webViewRef.current?.injectJavaScript(
+      `(function(){try{var m=${TIKTOK_PAUSE_MESSAGE};window.postMessage(m,'*');}catch(e){}})();true;`
+    );
+  }, []);
+
+  const handleLoadEnd = useCallback(() => {
+    hasLoadedRef.current = true;
+    if (!isActiveRef.current) return;
+    setTimeout(() => injectPlay(), 800);
+  }, [injectPlay]);
+
+  useEffect(() => {
+    if (!hasLoadedRef.current) return;
+    if (isActive) {
+      const t = setTimeout(() => injectPlay(), 300);
+      return () => clearTimeout(t);
+    } else {
+      injectPause();
+    }
+  }, [isActive, injectPlay, injectPause]);
 
   return (
     <View style={styles.card}>
       <WebView
+        ref={webViewRef}
         source={{ uri: embedUri }}
         originWhitelist={['*']}
         style={[styles.webview, { width: CARD_WIDTH - CARD_MARGIN * 2, height: EMBED_HEIGHT }]}
@@ -36,6 +102,9 @@ function TikTokEmbedBlock({ video }: { video: PlaceVideoFeedItem }) {
         javaScriptEnabled
         domStorageEnabled
         startInLoadingState
+        onLoadEnd={handleLoadEnd}
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
         renderLoading={() => (
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={darkColor} />
@@ -57,6 +126,7 @@ export default function TikTokFeed({ selectedCategory, selectedType }: TikTokFee
   const [videos, setVideos] = useState<PlaceVideoFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
@@ -108,6 +178,11 @@ export default function TikTokFeed({ selectedCategory, selectedType }: TikTokFee
     );
   }
 
+  const onScroll = useCallback((e: { nativeEvent: { contentOffset: { x: number } } }) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / CARD_WIDTH);
+    setActiveIndex((prev) => (index >= 0 && index < videos.length ? index : prev));
+  }, [videos.length]);
+
   return (
     <ScrollView
       horizontal
@@ -117,10 +192,13 @@ export default function TikTokFeed({ selectedCategory, selectedType }: TikTokFee
       snapToInterval={CARD_WIDTH}
       snapToAlignment="start"
       contentContainerStyle={styles.scrollContent}
+      onMomentumScrollEnd={onScroll}
+      onScroll={onScroll}
+      scrollEventThrottle={100}
     >
-      {videos.map((video) => (
+      {videos.map((video, index) => (
         <View key={video.id} style={[styles.slide, { width: CARD_WIDTH }]}>
-          <TikTokEmbedBlock video={video} />
+          <TikTokEmbedBlock video={video} isActive={index === activeIndex} />
         </View>
       ))}
     </ScrollView>

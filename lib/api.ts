@@ -13,6 +13,8 @@ import type {
   PlanResponse,
   CreatePlanRequest,
   UpdatePlanRequest,
+  CreateLinkPreviewTaskResponse,
+  GetTaskStatusResponse,
 } from '@/types/api';
 import Constants from 'expo-constants';
 
@@ -138,15 +140,38 @@ async function apiRequest<T>(
 }
 
 /**
- * Analyse un lien (TikTok, Instagram) et extrait les informations du lieu
+ * Analyse un lien (TikTok, Instagram) – mode synchrone (legacy).
+ * Préférer createLinkPreviewTask + getTaskStatus pour le flux async + polling.
  */
 export async function analyzeLink(url: string): Promise<LinkPreviewResponse | null> {
   return apiRequest<LinkPreviewResponse>('/api/link-preview', {
     method: 'POST',
     body: JSON.stringify({ url }),
-    // Playwright + scraping peut prendre du temps en production (cold start / navigation).
-    // On augmente uniquement pour cet endpoint pour éviter les 499 (client abort ~15s).
     timeoutMs: 60000,
+  });
+}
+
+/**
+ * Crée une tâche d’analyse de lien (réponse immédiate, traitement en arrière-plan).
+ * Puis appeler getTaskStatus(taskId) pour poller jusqu’à done/failed.
+ */
+export async function createLinkPreviewTask(url: string): Promise<CreateLinkPreviewTaskResponse | null> {
+  return apiRequest<CreateLinkPreviewTaskResponse>('/api/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+    timeoutMs: 10000,
+  });
+}
+
+/**
+ * Récupère le statut d’une tâche link-preview.
+ * Si status === 'done', result contient le LinkPreviewResponse.
+ * Si status === 'failed', error contient le message.
+ */
+export async function getTaskStatus(taskId: string): Promise<GetTaskStatusResponse | null> {
+  return apiRequest<GetTaskStatusResponse>(`/api/tasks/${taskId}`, {
+    method: 'GET',
+    timeoutMs: 15000,
   });
 }
 

@@ -45,6 +45,22 @@ export interface LinkPreviewResponse {
   message?: string;
 }
 
+/** Réponse POST /api/tasks (création d’une tâche link-preview) */
+export interface CreateLinkPreviewTaskResponse {
+  taskId: string;
+  status: 'queued';
+}
+
+/** Réponse GET /api/tasks/:taskId (statut + résultat) */
+export type TaskStatus = 'queued' | 'processing' | 'done' | 'failed' | 'expired';
+
+export interface GetTaskStatusResponse {
+  taskId: string;
+  status: TaskStatus;
+  result?: LinkPreviewResponse;
+  error?: string;
+}
+
 /**
  * Vidéo associée à un lieu
  */

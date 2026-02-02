@@ -22,7 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
-import { analyzeLink } from '@/lib/api';
+import { createLinkPreviewTask } from '@/lib/api';
 import { LinkPreviewResponse } from '@/types/api';
 
 interface LinkBottomSheetProps {
@@ -30,9 +30,11 @@ interface LinkBottomSheetProps {
   onClose: () => void;
   linkInput: string;
   onLinkInputChange: (text: string) => void;
+  /** Appelé quand une tâche est créée (job async). Le parent stocke taskId et poll getTaskStatus. */
+  onTaskCreated?: (taskId: string) => void;
   onSaveLink?: (result: LinkPreviewResponse) => void;
   onError?: (error: Error) => void;
-  onStartProcessing?: () => void; // Callback appelé avant le début du traitement
+  onStartProcessing?: () => void;
 }
 
 export default function LinkBottomSheet({
@@ -40,6 +42,7 @@ export default function LinkBottomSheet({
   onClose,
   linkInput,
   onLinkInputChange,
+  onTaskCreated,
   onSaveLink,
   onError,
   onStartProcessing,
@@ -226,77 +229,20 @@ export default function LinkBottomSheet({
                 if (!linkInput.trim() || isLoading) return;
 
                 setIsLoading(true);
-                
-                // Notifier le parent que le traitement commence (pour afficher le skeleton)
-                if (onStartProcessing) {
-                  onStartProcessing();
-                }
+                if (onStartProcessing) onStartProcessing();
 
                 try {
-                  const result = await analyzeLink(linkInput.trim());
-
-                  // Vérifier si c'est une réponse de traitement asynchrone
-                  if (result && 'processing' in result && result.processing === true) {
-                    // Le traitement est en cours en arrière-plan
-                    // Appeler le callback avec le statut de traitement
-                    if (onSaveLink) {
-                      onSaveLink({ processing: true, message: result.message });
-                    }
-
-                    // Fermer le bottom sheet
+                  const response = await createLinkPreviewTask(linkInput.trim());
+                  if (response?.taskId) {
+                    if (onTaskCreated) onTaskCreated(response.taskId);
                     onClose();
-                    // Réinitialiser l'input après un court délai
-                    setTimeout(() => {
-                      onLinkInputChange('');
-                    }, 300);
-                    setIsLoading(false);
-                    return;
+                    setTimeout(() => onLinkInputChange(''), 300);
+                  } else {
+                    if (onError) onError(new Error('Impossible de lancer l\'analyse du lien.'));
                   }
-
-                  // Ancien format de réponse (pour compatibilité)
-                  // Vérifier si aucune information utile n'a été récupérée
-                  const hasNoLLMInfo = !result.llm || 
-                    (result.llm.confidence === 'low' && 
-                     !result.llm.placeName && 
-                     !result.llm.address && 
-                     !result.llm.city &&
-                     !result.llm.country);
-                  
-                  const hasNoEnrichment = !result.osm && !result.google;
-                  
-                  // Si pas d'info LLM ET pas d'enrichissement, on considère qu'il n'y a rien
-                  if (hasNoLLMInfo && hasNoEnrichment) {
-                    const errorMessage = 'Impossible d\'extraire des informations de ce lien. Veuillez vérifier que le lien est valide et contient des informations sur un lieu, puis réessayer.';
-                    if (onError) {
-                      onError(new Error(errorMessage));
-                    }
-                    setIsLoading(false);
-                    return;
-                  }
-
-                  // Appeler le callback avec le résultat (asynchrone)
-                  if (onSaveLink) {
-                    // Ne pas attendre la fin du traitement pour fermer le modal
-                    // Le skeleton restera affiché jusqu'à la fin du traitement
-                    onSaveLink(result).catch((err) => {
-                      // L'erreur sera gérée dans onError si nécessaire
-                      console.error('[LinkBottomSheet] Erreur dans onSaveLink:', err);
-                    });
-                  }
-
-                  // Fermer le bottom sheet immédiatement (le skeleton reste affiché)
-                  onClose();
-                  // Réinitialiser l'input après un court délai
-                  setTimeout(() => {
-                    onLinkInputChange('');
-                  }, 300);
                 } catch (err: any) {
                   const errorMessage = err.message || 'Une erreur est survenue lors de l\'analyse du lien.';
-                  
-                  // Appeler le callback d'erreur si fourni (affichera le toast)
-                  if (onError) {
-                    onError(new Error(errorMessage));
-                  }
+                  if (onError) onError(new Error(errorMessage));
                 } finally {
                   setIsLoading(false);
                 }
