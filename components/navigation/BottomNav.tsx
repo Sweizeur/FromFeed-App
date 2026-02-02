@@ -11,6 +11,7 @@ interface BottomNavProps {
 
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const insets = useSafeAreaInsets();
+  const displayActiveTab = activeTab === 'plans' ? 'map' : activeTab;
 
   return (
     <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
@@ -22,7 +23,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         <Ionicons
           name="search-outline"
           size={24}
-          color={activeTab === 'search' ? darkColor : '#999'}
+          color={displayActiveTab === 'search' ? darkColor : '#999'}
         />
       </TouchableOpacity>
       <TouchableOpacity
@@ -33,9 +34,10 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         <Ionicons
           name="map-outline"
           size={24}
-          color={activeTab === 'map' ? darkColor : '#999'}
+          color={displayActiveTab === 'map' ? darkColor : '#999'}
         />
       </TouchableOpacity>
+      {/* Onglet Planning désactivé
       <TouchableOpacity
         style={styles.navItem}
         onPress={() => onTabChange('plans')}
@@ -47,6 +49,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           color={activeTab === 'plans' ? darkColor : '#999'}
         />
       </TouchableOpacity>
+      */}
       <TouchableOpacity
         style={styles.navItem}
         onPress={() => onTabChange('collections')}
@@ -55,7 +58,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         <Ionicons
           name="folder-outline"
           size={24}
-          color={activeTab === 'collections' ? darkColor : '#999'}
+          color={displayActiveTab === 'collections' ? darkColor : '#999'}
         />
       </TouchableOpacity>
       <TouchableOpacity
@@ -66,7 +69,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         <Ionicons
           name="settings-outline"
           size={24}
-          color={activeTab === 'settings' ? darkColor : '#999'}
+          color={displayActiveTab === 'settings' ? darkColor : '#999'}
         />
       </TouchableOpacity>
     </View>

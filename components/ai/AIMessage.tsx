@@ -32,11 +32,10 @@ interface Message {
 
 interface AIMessageProps {
   message: Message;
-  onValidateDraftPlan: () => void;
-  onRejectDraftPlan: () => void;
+  onAddToCalendar: (draftPlan: DraftPlan) => void | Promise<void>;
 }
 
-export default function AIMessage({ message, onValidateDraftPlan, onRejectDraftPlan }: AIMessageProps) {
+export default function AIMessage({ message, onAddToCalendar }: AIMessageProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -98,8 +97,7 @@ export default function AIMessage({ message, onValidateDraftPlan, onRejectDraftP
         {message.draftPlan && (
           <DraftPlanCard
             draftPlan={message.draftPlan}
-            onValidate={onValidateDraftPlan}
-            onReject={onRejectDraftPlan}
+            onAddToCalendar={onAddToCalendar}
           />
         )}
       </View>

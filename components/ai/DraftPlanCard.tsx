@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { darkColor } from '@/constants/theme';
 
@@ -22,12 +22,20 @@ interface DraftPlan {
 
 interface DraftPlanCardProps {
   draftPlan: DraftPlan;
-  onValidate: () => void;
-  onReject: () => void;
+  onAddToCalendar: (draftPlan: DraftPlan) => void | Promise<void>;
 }
 
-export default function DraftPlanCard({ draftPlan, onValidate, onReject }: DraftPlanCardProps) {
-  const isValidated = draftPlan.isValidated === true;
+export default function DraftPlanCard({ draftPlan, onAddToCalendar }: DraftPlanCardProps) {
+  const handleCalendarPress = () => {
+    Alert.alert(
+      'Ajouter au calendrier',
+      'Voulez-vous ajouter ce plan à votre calendrier ?',
+      [
+        { text: 'Non', style: 'cancel' },
+        { text: 'Oui', onPress: () => onAddToCalendar(draftPlan) },
+      ]
+    );
+  };
 
   return (
     <>
@@ -73,22 +81,14 @@ export default function DraftPlanCard({ draftPlan, onValidate, onReject }: Draft
           ))}
         </View>
       </View>
-      {!isValidated && (
-        <View style={styles.draftPlanActions}>
-          <TouchableOpacity
-            style={styles.draftPlanButton}
-            onPress={onReject}
-          >
-            <Ionicons name="close" size={22} color={darkColor} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.draftPlanButton}
-            onPress={onValidate}
-          >
-            <Ionicons name="checkmark" size={22} color={darkColor} />
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={styles.draftPlanActions}>
+        <TouchableOpacity
+          style={styles.draftPlanButton}
+          onPress={handleCalendarPress}
+        >
+          <Ionicons name="calendar-outline" size={22} color={darkColor} />
+        </TouchableOpacity>
+      </View>
     </>
   );
 }
@@ -153,11 +153,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   draftPlanButton: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -4,
   },
 });
 

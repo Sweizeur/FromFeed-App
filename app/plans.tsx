@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
+import { View, StyleSheet, Text, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import PlanForm from '@/components/plans/PlanForm';
 import TimelineRow from '@/components/plans/TimelineRow';
 import EventCard from '@/components/plans/EventCard';
 import { getPlans, type Plan, type PlanActivity } from '@/lib/api';
+import { exportPlanToCalendar } from '@/lib/calendar-export';
 import { darkColor } from '@/constants/theme';
 
 const PLANS_CACHE_KEY = '@fromfeed:plans_cache';
@@ -56,6 +57,7 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
   const [isCalendarCollapsed, setIsCalendarCollapsed] = useState(false);
   const [actualCalendarHeight, setActualCalendarHeight] = useState(340);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isExportingToCalendar, setIsExportingToCalendar] = useState(false);
   const calendarHeight = useSharedValue(340);
 
   // Charger les plans depuis le cache au montage
@@ -437,11 +439,30 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
   };
 
   const handleEventPress = (activity: PlanActivity) => {
-    // Optionnel : permettre d'éditer une activité spécifique
-    // Pour l'instant, on ouvre le formulaire pour éditer le plan entier
     if (selectedPlan) {
       setEditingPlan(selectedPlan);
       setIsFormVisible(true);
+    }
+  };
+
+  const handleAddToCalendar = async () => {
+    if (!selectedPlan || selectedPlan.activities.length === 0) return;
+    setIsExportingToCalendar(true);
+    const result = await exportPlanToCalendar(selectedPlan);
+    setIsExportingToCalendar(false);
+    if (result.success) {
+      const { added, skipped } = result;
+      let message: string;
+      if (added === 0 && skipped > 0) {
+        message = 'Tous les événements étaient déjà dans le calendrier.';
+      } else if (skipped > 0) {
+        message = `${added} événement${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''}${skipped > 0 ? `, ${skipped} déjà présent${skipped > 1 ? 's' : ''}` : ''}.`;
+      } else {
+        message = `${added} événement${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''} à votre calendrier.`;
+      }
+      Alert.alert('Calendrier', message);
+    } else {
+      Alert.alert('Erreur', result.error);
     }
   };
 
@@ -505,7 +526,12 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
 
   return (
     <View style={[styles.container, { flex: 1, paddingTop: propActiveTab ? insets.top : insets.top }]}>
-      {/* Calendrier */}
+      {/* Titre : Plans = intention + export, pas calendrier classique (voir docs/PLANS_VISION.md) */}
+      <View style={styles.screenHeader}>
+        <Text style={styles.screenTitle}>Sorties</Text>
+        <Text style={styles.screenSubtitle}>Idées de journée • Ajoutez au calendrier quand vous voulez</Text>
+      </View>
+      {/* Choix de date (pas un calendrier de gestion long terme) */}
       <View style={[styles.calendarWrapper, isCalendarCollapsed && styles.calendarWrapperCollapsed]}>
           <TouchableOpacity 
           style={styles.calendarHeader}
@@ -586,26 +612,41 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
               month: 'long',
             })}
           </Text>
-          {selectedPlan && selectedPlan.activities.length > 0 ? (
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={() => {
-                setEditingPlan(selectedPlan);
-                setIsFormVisible(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="create-outline" size={20} color={darkColor} />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={handleAddEvent}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="add" size={20} color={darkColor} />
-            </TouchableOpacity>
-          )}
+          <View style={styles.timelineHeaderActions}>
+            {selectedPlan && selectedPlan.activities.length > 0 && (
+              <TouchableOpacity
+                style={styles.calendarExportButton}
+                onPress={handleAddToCalendar}
+                disabled={isExportingToCalendar}
+                activeOpacity={0.7}
+              >
+                {isExportingToCalendar ? (
+                  <ActivityIndicator size="small" color={darkColor} />
+                ) : (
+                  <>
+                    <Ionicons name="calendar-outline" size={18} color={darkColor} />
+                    <Text style={styles.calendarExportLabel}>Ajouter au calendrier</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+            {selectedPlan && selectedPlan.activities.length > 0 ? (
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => {
+                  setEditingPlan(selectedPlan);
+                  setIsFormVisible(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="create-outline" size={20} color={darkColor} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.editButton} onPress={handleAddEvent} activeOpacity={0.7}>
+                <Ionicons name="add" size={20} color={darkColor} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
           
           {selectedPlan && selectedPlan.activities.length > 0 ? (
@@ -810,6 +851,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  screenHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  screenTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: darkColor,
+  },
+  screenSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -885,12 +941,30 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
     flex: 1,
   },
+  timelineHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  calendarExportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+  },
+  calendarExportLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: darkColor,
+  },
   editButton: {
     width: 36,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
   },
   timelineScroll: {
     width: '100%',

@@ -30,8 +30,28 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
   const displayAddress = place.googleFormattedAddress || place.address || place.city || 'Adresse non disponible';
   const rating = place.googleRating;
   const userRatingsTotal = place.googleUserRatingsTotal;
+  const openNow = place.googleOpenNow;
+  const openingHoursText = place.googleOpeningHours;
   const [userRating, setUserRating] = useState<number | null>(place.userRating ?? null);
   const [isRatingUpdating, setIsRatingUpdating] = useState(false);
+
+  // Formater les horaires (chaque ligne = "Monday: 9:00 AM – 5:00 PM") avec jours en français
+  const dayNamesFr: Record<string, string> = {
+    Monday: 'Lundi', Tuesday: 'Mardi', Wednesday: 'Mercredi', Thursday: 'Jeudi',
+    Friday: 'Vendredi', Saturday: 'Samedi', Sunday: 'Dimanche',
+  };
+  const openingHoursLines = openingHoursText
+    ? openingHoursText
+        .split('\n')
+        .map((line) => {
+          const colonIndex = line.indexOf(':');
+          if (colonIndex < 0) return line;
+          const dayEn = line.slice(0, colonIndex).trim();
+          const rest = line.slice(colonIndex + 1).trim();
+          const dayFr = dayNamesFr[dayEn] || dayEn;
+          return `${dayFr}: ${rest}`;
+        })
+    : [];
 
   // Mettre à jour la note quand le lieu change
   useEffect(() => {
@@ -167,6 +187,19 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
               )}
             </View>
           )}
+          {/* Ouvert / Fermé maintenant */}
+          {openNow !== undefined && openNow !== null && (
+            <View style={[styles.openNowBadge, openNow ? styles.openNowBadgeOpen : styles.openNowBadgeClosed]}>
+              <Ionicons
+                name={openNow ? 'time-outline' : 'close-circle-outline'}
+                size={16}
+                color={openNow ? '#0D7D4D' : '#8E8E93'}
+              />
+              <Text style={[styles.openNowText, openNow ? styles.openNowTextOpen : styles.openNowTextClosed]}>
+                {openNow ? 'Ouvert maintenant' : 'Fermé'}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Note personnelle */}
@@ -178,6 +211,20 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
             isUpdating={isRatingUpdating}
           />
         </View>
+
+        {/* Horaires d'ouverture */}
+        {openingHoursLines.length > 0 && (
+          <PlaceInfoSection
+            icon="time-outline"
+            title="Horaires"
+          >
+            {openingHoursLines.map((line, index) => (
+              <Text key={index} style={styles.openingHoursLine}>
+                {line}
+              </Text>
+            ))}
+          </PlaceInfoSection>
+        )}
 
         {/* Adresse */}
         <PlaceInfoSection
@@ -403,6 +450,38 @@ const styles = StyleSheet.create({
   ratingCount: {
     fontSize: 12,
     color: '#666',
+  },
+  openNowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  openNowBadgeOpen: {
+    backgroundColor: '#E8F5E9',
+  },
+  openNowBadgeClosed: {
+    backgroundColor: '#F2F2F7',
+  },
+  openNowText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  openNowTextOpen: {
+    color: '#0D7D4D',
+  },
+  openNowTextClosed: {
+    color: '#8E8E93',
+  },
+  openingHoursLine: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 22,
+    marginBottom: 4,
   },
   personalRatingSection: {
     flexDirection: 'row',

@@ -4,13 +4,16 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, Easing } from 'react-native-reanimated';
-import { getConversation, validateDraftPlan, rejectDraftPlan } from '@/lib/api';
+import { getConversation } from '@/lib/api';
+import { exportPlanToCalendar } from '@/lib/calendar-export';
+import type { Plan } from '@/types/api';
 import ConversationsModal from '@/components/modals/ConversationsModal';
 import AIHeader from '@/components/ai/AIHeader';
 import AIMessage from '@/components/ai/AIMessage';
@@ -28,6 +31,49 @@ const SUGGESTIONS = [
 const CONVERSATION_ID_KEY = '@fromfeed:current_conversation_id';
 const getConversationMessagesKey = (conversationId: string) => `@fromfeed:conversation_messages_${conversationId}`;
 const getConversationTitleKey = (conversationId: string) => `@fromfeed:conversation_title_${conversationId}`;
+
+function toDateOnly(dateStr: string): string {
+  const part = dateStr.split('T')[0];
+  return part && /^\d{4}-\d{2}-\d{2}$/.test(part) ? part : dateStr;
+}
+
+function draftPlanToPlan(draft: {
+  date: string;
+  title: string | null;
+  notes: string | null;
+  activities: Array<{ placeName: string; placeId: string; order: number; startTime?: string; endTime?: string; notes?: string }>;
+}): Plan {
+  const date = toDateOnly(draft.date);
+  const now = new Date().toISOString();
+  return {
+    id: `draft-${Date.now()}`,
+    userId: '',
+    date,
+    title: draft.title ?? null,
+    notes: draft.notes ?? null,
+    activities: draft.activities.map((a, i) => ({
+      id: `draft-activity-${i}`,
+      planId: `draft-${Date.now()}`,
+      placeId: a.placeId,
+      order: a.order,
+      startTime: a.startTime ?? null,
+      endTime: a.endTime ?? null,
+      notes: a.notes ?? null,
+      place: {
+        id: a.placeId,
+        lat: 0,
+        lon: 0,
+        placeName: a.placeName,
+        rawTitle: a.placeName,
+        provider: 'draft',
+        canonicalUrl: '',
+      },
+      createdAt: now,
+    })),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 interface Message {
   id: string;
@@ -473,184 +519,18 @@ export default function AIPage() {
                 <AIMessage
                   key={message.id}
                   message={message}
-                  onValidateDraftPlan={async () => {
-                    if (!conversationId) return;
-                    // Marquer le plan comme validé localement
-                    setMessages((prev) => {
-                      const updated = prev.map((msg) =>
-                        msg.id === message.id
-                          ? { 
-                              ...msg, 
-                              draftPlan: msg.draftPlan 
-                                ? { ...msg.draftPlan, isValidated: true }
-                                : undefined
-                            }
-                          : msg
-                      );
-                      // Sauvegarder dans le cache immédiatement
-                      if (conversationId) {
-                        AsyncStorage.setItem(
-                          getConversationMessagesKey(conversationId),
-                          JSON.stringify(updated)
-                        ).catch((cacheError) => {
-                          __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
-                        });
-                      }
-                      return updated;
-                    });
-                    try {
-                      const result = await validateDraftPlan(conversationId, message.draftPlan!, message.id);
-                      if (!result.success) {
-                        // En cas d'échec, remettre isValidated à false
-                        setMessages((prev) => {
-                          const updated = prev.map((msg) =>
-                            msg.id === message.id
-                              ? { 
-                                  ...msg, 
-                                  draftPlan: msg.draftPlan 
-                                    ? { ...msg.draftPlan, isValidated: false }
-                                    : undefined
-                                }
-                              : msg
-                          );
-                          // Mettre à jour le cache
-                          if (conversationId) {
-                            AsyncStorage.setItem(
-                              getConversationMessagesKey(conversationId),
-                              JSON.stringify(updated)
-                            ).catch((cacheError) => {
-                              __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
-                            });
-                          }
-                          return updated;
-                        });
-                      } else {
-                        // En cas de succès, s'assurer que le cache est à jour avec isValidated: true
-                        setMessages((prev) => {
-                          const updated = prev.map((msg) =>
-                            msg.id === message.id
-                              ? { 
-                                  ...msg, 
-                                  draftPlan: msg.draftPlan 
-                                    ? { ...msg.draftPlan, isValidated: true }
-                                    : undefined
-                                }
-                              : msg
-                          );
-                          // Mettre à jour le cache
-                          if (conversationId) {
-                            AsyncStorage.setItem(
-                              getConversationMessagesKey(conversationId),
-                              JSON.stringify(updated)
-                            ).catch((cacheError) => {
-                              __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
-                            });
-                          }
-                          return updated;
-                        });
-                      }
-                    } catch (error) {
-                      __DEV__ && console.error('[AIPage] Erreur lors de la validation du plan:', error);
-                      // En cas d'erreur, remettre isValidated à false
-                      setMessages((prev) => {
-                        const updated = prev.map((msg) =>
-                          msg.id === message.id
-                            ? { 
-                                ...msg, 
-                                draftPlan: msg.draftPlan 
-                                  ? { ...msg.draftPlan, isValidated: false }
-                                  : undefined
-                              }
-                            : msg
-                        );
-                        // Mettre à jour le cache
-                        if (conversationId) {
-                          AsyncStorage.setItem(
-                            getConversationMessagesKey(conversationId),
-                            JSON.stringify(updated)
-                          ).catch((cacheError) => {
-                            __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
-                          });
-                        }
-                        return updated;
-                      });
-                    }
-                  }}
-                  onRejectDraftPlan={async () => {
-                    if (!conversationId) return;
-                    // Marquer le plan comme validé (rejeté) localement
-                    setMessages((prev) => {
-                      const updated = prev.map((msg) =>
-                        msg.id === message.id
-                          ? { 
-                              ...msg, 
-                              draftPlan: msg.draftPlan 
-                                ? { ...msg.draftPlan, isValidated: true }
-                                : undefined
-                            }
-                          : msg
-                      );
-                      // Sauvegarder dans le cache immédiatement
-                      if (conversationId) {
-                        AsyncStorage.setItem(
-                          getConversationMessagesKey(conversationId),
-                          JSON.stringify(updated)
-                        ).catch((cacheError) => {
-                          __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
-                        });
-                      }
-                      return updated;
-                    });
-                    try {
-                      await rejectDraftPlan(conversationId, message.id);
-                      // S'assurer que le cache est à jour après le rejet
-                      setMessages((prev) => {
-                        const updated = prev.map((msg) =>
-                          msg.id === message.id
-                            ? { 
-                                ...msg, 
-                                draftPlan: msg.draftPlan 
-                                  ? { ...msg.draftPlan, isValidated: true }
-                                  : undefined
-                              }
-                            : msg
-                        );
-                        // Mettre à jour le cache
-                        if (conversationId) {
-                          AsyncStorage.setItem(
-                            getConversationMessagesKey(conversationId),
-                            JSON.stringify(updated)
-                          ).catch((cacheError) => {
-                            __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
-                          });
-                        }
-                        return updated;
-                      });
-                    } catch (error) {
-                      __DEV__ && console.error('[AIPage] Erreur lors du rejet du plan:', error);
-                      // En cas d'erreur, remettre isValidated à false
-                      setMessages((prev) => {
-                        const updated = prev.map((msg) =>
-                          msg.id === message.id
-                            ? { 
-                                ...msg, 
-                                draftPlan: msg.draftPlan 
-                                  ? { ...msg.draftPlan, isValidated: false }
-                                  : undefined
-                              }
-                            : msg
-                        );
-                        // Mettre à jour le cache
-                        if (conversationId) {
-                          AsyncStorage.setItem(
-                            getConversationMessagesKey(conversationId),
-                            JSON.stringify(updated)
-                          ).catch((cacheError) => {
-                            __DEV__ && console.error('[AIPage] Erreur lors de la sauvegarde du cache:', cacheError);
-                          });
-                        }
-                        return updated;
-                      });
+                  onAddToCalendar={async (draftPlan) => {
+                    const plan = draftPlanToPlan(draftPlan);
+                    const result = await exportPlanToCalendar(plan);
+                    if (result.success) {
+                      const msg =
+                        result.added === 0 && result.skipped > 0
+                          ? `${result.skipped} événement(s) déjà présent(s) dans le calendrier.`
+                          : `${result.added} événement(s) ajouté(s) au calendrier.` +
+                            (result.skipped > 0 ? ` ${result.skipped} déjà présent(s).` : '');
+                      Alert.alert('Calendrier', msg);
+                    } else {
+                      Alert.alert('Erreur', result.error);
                     }
                   }}
                 />

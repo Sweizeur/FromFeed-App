@@ -21,7 +21,6 @@ import LinkBottomSheet from '@/components/modals/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
 import PlaceTransition from '@/components/places/PlaceTransition';
 import AddToCollectionModal from '@/components/collections/AddToCollectionModal';
-import PlansScreen from './plans';
 import CollectionsScreen from './collections';
 import { createLinkPreviewTask, getTaskStatus, deletePlace, type Place, type PlaceSummary } from '@/lib/api';
 
@@ -344,7 +343,7 @@ export default function MapScreen() {
     return { height: HEADER_WHITE_HEIGHT + cardTranslateY.value };
   });
 
-  const showHeader = activeTab === 'map' || activeTab === 'search';
+  const showHeader = activeTab === 'map' || activeTab === 'plans' || activeTab === 'search';
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -364,8 +363,8 @@ export default function MapScreen() {
           />
         )}
 
-        {/* Onglet Carte */}
-        {activeTab === 'map' && (
+        {/* Onglet Carte (afficher aussi si activeTab === 'plans' car onglet Planning désactivé) */}
+        {(activeTab === 'map' || activeTab === 'plans') && (
           <>
             <Animated.View style={[styles.mapContainer, mapContainerAnimatedStyle]}>
               <UpgradePopup />
@@ -456,7 +455,9 @@ export default function MapScreen() {
         )}
 
         {activeTab === 'collections' && <CollectionsScreen activeTab={activeTab} onTabChange={setActiveTab} />}
+        {/* Onglet Planning désactivé
         {activeTab === 'plans' && <PlansScreen activeTab={activeTab} onTabChange={setActiveTab} />}
+        */}
         {activeTab === 'settings' && (
           <View style={styles.tabContent}>
             <Text style={styles.tabTitle}>Settings</Text>

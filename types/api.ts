@@ -113,6 +113,8 @@ export interface Place {
   googlePhone?: string | null;
   googleWebsite?: string | null;
   googlePhotoUrl?: string | null;
+  googleOpenNow?: boolean | null;
+  googleOpeningHours?: string | null; // Lignes "Monday: 9:00 AM – 5:00 PM" séparées par \n
   userRating?: number | null; // Note personnelle de l'utilisateur (0.5 à 5, par pas de 0.5)
   category?: string | null;
   type?: string | null;
