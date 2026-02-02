@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import BottomNav from '@/components/navigation/BottomNav';
+import AppBottomNav from '@/components/navigation/AppBottomNav';
 import GroupCard from '@/components/groups/GroupCard';
 import CollectionCard from '@/components/groups/CollectionCard';
 import CreateGroupModal from '@/components/groups/CreateGroupModal';
@@ -205,19 +205,7 @@ export default function GroupsScreen({ activeTab: propActiveTab, onTabChange: pr
       )}
 
       {/* Bottom Navigation - seulement si GroupsScreen est utilisé comme page standalone */}
-      {!propActiveTab && (
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-          <BottomNav
-            activeTab="groups"
-            onTabChange={(tab) => {
-              if (tab === 'home') router.push('/home');
-              else if (tab === 'plans') router.push('/plans');
-              else if (tab === 'groups') router.push('/groups');
-              else if (tab === 'settings') router.push('/settings');
-            }}
-          />
-        </View>
-      )}
+      {!propActiveTab && <AppBottomNav activeTab="groups" />}
 
       {/* Modals - toujours rendus mais avec pointerEvents conditionnel */}
       <CreateGroupModal

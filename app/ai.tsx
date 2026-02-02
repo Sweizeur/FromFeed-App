@@ -14,6 +14,7 @@ import { getConversation, validateDraftPlan, rejectDraftPlan } from '@/lib/api';
 import ConversationsModal from '@/components/modals/ConversationsModal';
 import AIHeader from '@/components/ai/AIHeader';
 import AIMessage from '@/components/ai/AIMessage';
+import AILoadingIndicator from '@/components/ai/AILoadingIndicator';
 import AIInput from '@/components/ai/AIInput';
 import AIEmptyState from '@/components/ai/AIEmptyState';
 
@@ -458,7 +459,17 @@ export default function AIPage() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={true}
             >
-              {messages.map((message) => (
+              {messages.map((message, index) => {
+                const isLastMessage = index === messages.length - 1;
+                const showLoader =
+                  isLoading &&
+                  isLastMessage &&
+                  message.role === 'assistant' &&
+                  message.content === '';
+                if (showLoader) {
+                  return <AILoadingIndicator key={message.id} />;
+                }
+                return (
                 <AIMessage
                   key={message.id}
                   message={message}
@@ -643,7 +654,8 @@ export default function AIPage() {
                     }
                   }}
                 />
-              ))}
+              );
+              })}
 
             </ScrollView>
           ) : (

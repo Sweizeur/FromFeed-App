@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import BottomNav from '@/components/navigation/BottomNav';
+import AppBottomNav from '@/components/navigation/AppBottomNav';
 import CollectionCard from '@/components/groups/CollectionCard';
 import CreateCollectionModal from '@/components/groups/CreateCollectionModal';
 import { getCollections } from '@/lib/api';
@@ -196,19 +196,7 @@ export default function CollectionsScreen({ activeTab: propActiveTab, onTabChang
       )}
 
       {/* Bottom Navigation - seulement si CollectionsScreen est utilisé comme page standalone */}
-      {!propActiveTab && (
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-          <BottomNav
-            activeTab="collections"
-            onTabChange={(tab) => {
-              if (tab === 'home') router.push('/home');
-              else if (tab === 'plans') router.push('/plans');
-              else if (tab === 'collections') router.push('/collections');
-              else if (tab === 'settings') router.push('/settings');
-            }}
-          />
-        </View>
-      )}
+      {!propActiveTab && <AppBottomNav activeTab="collections" />}
 
       {/* Modal */}
       <CreateCollectionModal

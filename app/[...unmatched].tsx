@@ -7,5 +7,5 @@ import { Redirect } from 'expo-router';
  */
 export default function UnmatchedRoute() {
   // Rediriger vers home immédiatement
-  return <Redirect href="/home" />;
+  return <Redirect href="/map" />;
 }

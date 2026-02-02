@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { PlaceSummary } from '@/types/api';
+import { darkColor } from '@/constants/theme';
 
 interface PlaceFiltersProps {
   places: PlaceSummary[];
@@ -32,71 +34,85 @@ export default function PlaceFilters({
     return Array.from(typesSet).sort();
   }, [places, selectedCategory]);
 
+  const showTypeRow = selectedCategory && allTypes.length > 0;
+
+  const goBackToCategories = () => {
+    onCategoryChange(null);
+    onTypeChange(null);
+  };
+
   return (
     <View style={styles.container}>
-      {/* Filtres par catégorie */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryContainer}
-      >
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedCategory === null && styles.filterButtonActive,
-          ]}
-          onPress={() => onCategoryChange(null)}
+      {!showTypeRow ? (
+        /* Vue catégories : Tous, Restauration, Activité */
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryContainer}
         >
-          <Text
+          <TouchableOpacity
             style={[
-              styles.filterButtonText,
-              selectedCategory === null && styles.filterButtonTextActive,
+              styles.filterButton,
+              selectedCategory === null && styles.filterButtonActive,
             ]}
+            onPress={() => onCategoryChange(null)}
           >
-            Tous
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedCategory === 'Restauration' && styles.filterButtonActive,
-          ]}
-          onPress={() => onCategoryChange('Restauration')}
-        >
-          <Text
+            <Text
+              style={[
+                styles.filterButtonText,
+                selectedCategory === null && styles.filterButtonTextActive,
+              ]}
+            >
+              Tous
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[
-              styles.filterButtonText,
-              selectedCategory === 'Restauration' && styles.filterButtonTextActive,
+              styles.filterButton,
+              selectedCategory === 'Restauration' && styles.filterButtonActive,
             ]}
+            onPress={() => onCategoryChange('Restauration')}
           >
-            Restauration
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedCategory === 'Activité' && styles.filterButtonActive,
-          ]}
-          onPress={() => onCategoryChange('Activité')}
-        >
-          <Text
+            <Text
+              style={[
+                styles.filterButtonText,
+                selectedCategory === 'Restauration' && styles.filterButtonTextActive,
+              ]}
+            >
+              Restauration
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[
-              styles.filterButtonText,
-              selectedCategory === 'Activité' && styles.filterButtonTextActive,
+              styles.filterButton,
+              selectedCategory === 'Activité' && styles.filterButtonActive,
             ]}
+            onPress={() => onCategoryChange('Activité')}
           >
-            Activité
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* Filtres par type */}
-      {selectedCategory && allTypes.length > 0 && (
+            <Text
+              style={[
+                styles.filterButtonText,
+                selectedCategory === 'Activité' && styles.filterButtonTextActive,
+              ]}
+            >
+              Activité
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      ) : (
+        /* Vue sous-filtres : retour catégorie + types (les filtres catégorie disparaissent) */
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.typeContainer}
         >
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={goBackToCategories}
+          >
+            <Ionicons name="chevron-back" size={18} color={darkColor} />
+            <Text style={styles.backButtonText}>{selectedCategory}</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.typeButton,
@@ -140,8 +156,10 @@ export default function PlaceFilters({
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 12,
+    flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: 16,
+    paddingVertical: 4,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
@@ -149,9 +167,10 @@ const styles = StyleSheet.create({
   categoryContainer: {
     gap: 8,
     paddingRight: 16,
+    alignItems: 'center',
   },
   filterButton: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: '#F3F3F3',
@@ -171,14 +190,31 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   typeContainer: {
-    marginTop: 12,
     gap: 8,
     paddingRight: 16,
+    alignItems: 'center',
   },
-  typeButton: {
-    paddingHorizontal: 16,
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    marginRight: 4,
+  },
+  backButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: darkColor,
+    marginLeft: 2,
+  },
+  typeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
     backgroundColor: '#F8F8F8',
     borderWidth: 1,
     borderColor: '#E5E5E5',
@@ -188,7 +224,7 @@ const styles = StyleSheet.create({
     borderColor: '#1A1A1A',
   },
   typeButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     color: '#666',
   },

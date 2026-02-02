@@ -162,8 +162,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   subHeader: {
-    minHeight: 60,
+    height: 52,
     backgroundColor: '#fff',
+    justifyContent: 'center',
   },
   searchBar: {
     flexDirection: 'row',

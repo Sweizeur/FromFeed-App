@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import BottomNav from '@/components/navigation/BottomNav';
+import AppBottomNav from '@/components/navigation/AppBottomNav';
 import CollectionCard from '@/components/groups/CollectionCard';
 import { getGroup } from '@/lib/api';
 import type { Group, Collection } from '@/types/groups';
@@ -184,17 +184,7 @@ export default function GroupDetailScreen() {
       </ScrollView>
 
       {/* Bottom Navigation */}
-      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-        <BottomNav
-          activeTab="groups"
-          onTabChange={(tab) => {
-            if (tab === 'home') router.push('/home');
-            else if (tab === 'plans') router.push('/plans');
-            else if (tab === 'groups') router.push('/groups');
-            else if (tab === 'settings') router.push('/settings');
-          }}
-        />
-      </View>
+      <AppBottomNav activeTab="groups" />
     </SafeAreaView>
   );
 }

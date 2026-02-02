@@ -16,13 +16,24 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => onTabChange('home')}
+        onPress={() => onTabChange('search')}
+        activeOpacity={0.7}
+      >
+        <Ionicons
+          name="search-outline"
+          size={24}
+          color={activeTab === 'search' ? darkColor : '#999'}
+        />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.navItem}
+        onPress={() => onTabChange('map')}
         activeOpacity={0.7}
       >
         <Ionicons
           name="map-outline"
           size={24}
-          color={activeTab === 'home' ? darkColor : '#999'}
+          color={activeTab === 'map' ? darkColor : '#999'}
         />
       </TouchableOpacity>
       <TouchableOpacity

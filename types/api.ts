@@ -58,6 +58,18 @@ export interface PlaceVideo {
   createdAt: string;
 }
 
+/** Élément du fil vidéo (place_videos) pour l’onglet Recherche */
+export interface PlaceVideoFeedItem {
+  id: string;
+  videoId: string;
+  canonicalUrl: string;
+  rawTitle?: string | null;
+  placeId: string;
+  placeName?: string | null;
+  category?: string | null;
+  type?: string | null;
+}
+
 /**
  * Place complète avec toutes les données
  */

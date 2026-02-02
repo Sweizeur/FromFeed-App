@@ -20,7 +20,7 @@ export default function SettingsScreen() {
       <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => router.push('/home')}
+          onPress={() => router.push('/map')}
           activeOpacity={0.7}
         >
           <Ionicons name="map-outline" size={24} color="#999" />

@@ -6,6 +6,7 @@ import type {
   PlaceSummary,
   PlacesSummaryResponse,
   PlaceDetailsResponse,
+  PlaceVideoFeedItem,
   Plan,
   PlanActivity,
   PlansResponse,
@@ -190,6 +191,23 @@ export async function getPlacesCount(): Promise<{ count: number } | null> {
   return apiRequest<{ count: number }>('/api/places/count', {
     method: 'GET',
   });
+}
+
+/**
+ * Récupère le fil de vidéos TikTok des lieux de l’utilisateur (aléatoire, filtré par catégorie/type).
+ */
+export async function getPlaceVideosFeed(params?: {
+  category?: string | null;
+  type?: string | null;
+  limit?: number;
+}): Promise<{ videos: PlaceVideoFeedItem[] } | null> {
+  const searchParams = new URLSearchParams();
+  if (params?.category) searchParams.set('category', params.category);
+  if (params?.type) searchParams.set('type', params.type);
+  if (params?.limit != null) searchParams.set('limit', String(params.limit));
+  const qs = searchParams.toString();
+  const url = qs ? `/api/places/feed?${qs}` : '/api/places/feed';
+  return apiRequest<{ videos: PlaceVideoFeedItem[] }>(url, { method: 'GET' });
 }
 
 /**
