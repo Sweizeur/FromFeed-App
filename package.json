@@ -2,11 +2,13 @@
   "name": "fromfeed-app",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "packageManager": "pnpm@9.15.0",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "prebuild": "expo prebuild",
     "web": "expo start --web",
     "lint": "expo lint",
     "postinstall": "patch-package"

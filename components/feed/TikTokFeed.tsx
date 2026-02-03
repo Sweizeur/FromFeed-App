@@ -17,6 +17,8 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH;
 const CARD_MARGIN = 8;
 const EMBED_HEIGHT = Math.min(580, Math.round(SCREEN_HEIGHT * 0.72));
+const CAPTION_HEIGHT = 72; // zone titre sous la vidéo
+const CARD_HEIGHT = EMBED_HEIGHT + CAPTION_HEIGHT;
 
 interface TikTokFeedProps {
   selectedCategory: string | null;
@@ -45,8 +47,8 @@ function TikTokEmbedBlock({
   const hasLoadedRef = React.useRef(false);
   const isActiveRef = React.useRef(isActive);
   isActiveRef.current = isActive;
-  // Embed Player officiel TikTok (player/v1) — autoplay seulement quand la carte est visible
-  const embedUri = `https://www.tiktok.com/player/v1/${video.videoId}?loop=1&play_button=0`;
+  // Embed Player officiel TikTok (player/v1) — pas d'autoplay : on reste en pause par défaut, lecture uniquement quand la carte est visible
+  const embedUri = `https://www.tiktok.com/player/v1/${video.videoId}?loop=1&controls=0`;
 
   const injectPlay = useCallback(() => {
     webViewRef.current?.injectJavaScript(
@@ -77,9 +79,13 @@ function TikTokEmbedBlock({
 
   const handleLoadEnd = useCallback(() => {
     hasLoadedRef.current = true;
-    if (!isActiveRef.current) return;
-    setTimeout(() => injectPlay(), 800);
-  }, [injectPlay]);
+    // Par défaut : mettre en pause (même si le player a autoplay côté TikTok)
+    setTimeout(() => injectPause(), 200);
+    // Si cette carte est déjà visible, lancer la lecture après un court délai
+    if (isActiveRef.current) {
+      setTimeout(() => injectPlay(), 800);
+    }
+  }, [injectPlay, injectPause]);
 
   useEffect(() => {
     if (!hasLoadedRef.current) return;
@@ -178,18 +184,17 @@ export default function TikTokFeed({ selectedCategory, selectedType }: TikTokFee
     );
   }
 
-  const onScroll = useCallback((e: { nativeEvent: { contentOffset: { x: number } } }) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / CARD_WIDTH);
+  const onScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const index = Math.round(e.nativeEvent.contentOffset.y / CARD_HEIGHT);
     setActiveIndex((prev) => (index >= 0 && index < videos.length ? index : prev));
   }, [videos.length]);
 
   return (
     <ScrollView
-      horizontal
       pagingEnabled
-      showsHorizontalScrollIndicator={false}
+      showsVerticalScrollIndicator={false}
       decelerationRate="fast"
-      snapToInterval={CARD_WIDTH}
+      snapToInterval={CARD_HEIGHT}
       snapToAlignment="start"
       contentContainerStyle={styles.scrollContent}
       onMomentumScrollEnd={onScroll}
@@ -197,7 +202,7 @@ export default function TikTokFeed({ selectedCategory, selectedType }: TikTokFee
       scrollEventThrottle={100}
     >
       {videos.map((video, index) => (
-        <View key={video.id} style={[styles.slide, { width: CARD_WIDTH }]}>
+        <View key={video.id} style={[styles.slide, { width: CARD_WIDTH, height: CARD_HEIGHT }]}>
           <TikTokEmbedBlock video={video} isActive={index === activeIndex} />
         </View>
       ))}
@@ -217,7 +222,7 @@ const styles = StyleSheet.create({
   },
   slide: {
     paddingHorizontal: CARD_MARGIN,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   card: {
     backgroundColor: '#fff',

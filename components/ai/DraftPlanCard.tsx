@@ -10,6 +10,8 @@ interface DraftPlanActivity {
   startTime?: string;
   endTime?: string;
   notes?: string;
+  closedAtRequestedTime?: boolean;
+  openingHoursUnknown?: boolean;
 }
 
 interface DraftPlan {
@@ -59,10 +61,16 @@ export default function DraftPlanCard({ draftPlan, onAddToCalendar }: DraftPlanC
               key={index} 
               style={[
                 styles.draftPlanActivity,
-                index === draftPlan.activities.length - 1 && styles.draftPlanActivityLast
+                index === draftPlan.activities.length - 1 && styles.draftPlanActivityLast,
+                activity.closedAtRequestedTime && styles.draftPlanActivityClosed,
+                activity.openingHoursUnknown && styles.draftPlanActivityHoursUnknown,
               ]}
             >
-              <Text style={styles.draftPlanActivityName}>
+              <Text style={[
+                styles.draftPlanActivityName,
+                activity.closedAtRequestedTime && styles.draftPlanActivityNameClosed,
+                activity.openingHoursUnknown && styles.draftPlanActivityNameHoursUnknown,
+              ]}>
                 {activity.order + 1}. {activity.placeName}
               </Text>
               {(activity.startTime || activity.endTime) && (
@@ -131,11 +139,31 @@ const styles = StyleSheet.create({
   draftPlanActivityLast: {
     borderBottomWidth: 0,
   },
+  draftPlanActivityClosed: {
+    backgroundColor: '#FFEBEE',
+    borderLeftWidth: 4,
+    borderLeftColor: '#E57373',
+    marginLeft: -16,
+    paddingLeft: 12,
+  },
+  draftPlanActivityHoursUnknown: {
+    backgroundColor: '#FFF8E1',
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFB74D',
+    marginLeft: -16,
+    paddingLeft: 12,
+  },
   draftPlanActivityName: {
     fontSize: 15,
     fontWeight: '600',
     color: darkColor,
     marginBottom: 4,
+  },
+  draftPlanActivityNameClosed: {
+    color: '#C62828',
+  },
+  draftPlanActivityNameHoursUnknown: {
+    color: '#E65100',
   },
   draftPlanActivityTime: {
     fontSize: 13,
