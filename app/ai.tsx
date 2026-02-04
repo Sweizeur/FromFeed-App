@@ -11,9 +11,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, Easing } from 'react-native-reanimated';
-import { getConversation } from '@/lib/api';
+import { getConversation, getPlaceDetails } from '@/lib/api';
 import { exportPlanToCalendar } from '@/lib/calendar-export';
-import type { Plan } from '@/types/api';
+import type { Plan, PlanActivity } from '@/types/api';
 import ConversationsModal from '@/components/modals/ConversationsModal';
 import AIHeader from '@/components/ai/AIHeader';
 import AIMessage from '@/components/ai/AIMessage';
@@ -72,6 +72,46 @@ function draftPlanToPlan(draft: {
     })),
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Enrichit le plan avec les détails des lieux (adresse, lat/lon, tél, URL) pour l'export calendrier. */
+async function enrichPlanWithPlaceDetails(plan: Plan): Promise<Plan> {
+  const placeIds = [...new Set(plan.activities.map((a) => a.placeId).filter((id) => UUID_REGEX.test(id)))];
+  const detailsByPlaceId = new Map<string, PlanActivity['place']>();
+  await Promise.all(
+    placeIds.map(async (placeId) => {
+      const res = await getPlaceDetails(placeId);
+      const p = res?.place;
+      if (p) {
+        detailsByPlaceId.set(placeId, {
+          id: p.id,
+          lat: p.lat ?? 0,
+          lon: p.lon ?? 0,
+          placeName: p.placeName ?? p.rawTitle ?? null,
+          rawTitle: p.rawTitle ?? p.placeName ?? null,
+          googleFormattedAddress: p.googleFormattedAddress ?? null,
+          address: p.address ?? null,
+          city: p.city ?? null,
+          googlePhone: p.googlePhone ?? null,
+          websiteUrl: p.websiteUrl ?? p.googleWebsite ?? null,
+          provider: p.provider ?? 'draft',
+          canonicalUrl: p.canonicalUrl ?? '',
+        });
+      }
+    })
+  );
+  return {
+    ...plan,
+    activities: plan.activities.map((a) => {
+      const details = detailsByPlaceId.get(a.placeId);
+      return {
+        ...a,
+        place: details ?? a.place,
+      };
+    }),
   };
 }
 
@@ -521,7 +561,8 @@ export default function AIPage() {
                   message={message}
                   onAddToCalendar={async (draftPlan) => {
                     const plan = draftPlanToPlan(draftPlan);
-                    const result = await exportPlanToCalendar(plan);
+                    const planWithDetails = await enrichPlanWithPlaceDetails(plan);
+                    const result = await exportPlanToCalendar(planWithDetails);
                     if (result.success) {
                       const msg =
                         result.added === 0 && result.skipped > 0

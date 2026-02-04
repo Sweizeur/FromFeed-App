@@ -22,8 +22,8 @@ const CAPTION_HEIGHT = 72; // zone titre sous la vidéo
 const CARD_HEIGHT = EMBED_HEIGHT + CAPTION_HEIGHT;
 
 interface TikTokFeedProps {
-  selectedCategory: string | null;
-  selectedType: string | null;
+  selectedCategory?: string | null;
+  selectedType?: string | null;
   /** false quand l'utilisateur quitte l'onglet Feed → on met en pause la vidéo */
   tabFocused?: boolean;
 }

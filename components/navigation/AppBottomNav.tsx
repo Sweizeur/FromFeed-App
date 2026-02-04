@@ -8,7 +8,7 @@ interface AppBottomNavProps {
 }
 
 /**
- * Bottom nav avec navigation par onglets (map, search, plans, collections, settings).
+ * Bottom nav avec navigation par onglets (map, search, collections, settings).
  * À utiliser sur les pages standalone (collections, groups, group-detail, settings).
  */
 export default function AppBottomNav({ activeTab }: AppBottomNavProps) {

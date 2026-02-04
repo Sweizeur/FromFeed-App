@@ -11,7 +11,7 @@ interface BottomNavProps {
 
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const insets = useSafeAreaInsets();
-  const displayActiveTab = activeTab === 'plans' ? 'map' : activeTab;
+  const displayActiveTab = activeTab;
 
   return (
     <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
@@ -37,19 +37,6 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           color={displayActiveTab === 'map' ? darkColor : '#999'}
         />
       </TouchableOpacity>
-      {/* Onglet Planning désactivé
-      <TouchableOpacity
-        style={styles.navItem}
-        onPress={() => onTabChange('plans')}
-        activeOpacity={0.7}
-      >
-        <Ionicons
-          name="calendar-outline"
-          size={24}
-          color={activeTab === 'plans' ? darkColor : '#999'}
-        />
-      </TouchableOpacity>
-      */}
       <TouchableOpacity
         style={styles.navItem}
         onPress={() => onTabChange('collections')}

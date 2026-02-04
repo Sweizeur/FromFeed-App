@@ -1,9 +1,8 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import MapHeader from '@/components/navigation/MapHeader';
-import { usePlaces } from '@/hooks/usePlaces';
 import { darkColor } from '@/constants/theme';
 
 const TikTokFeed = lazy(() => import('@/components/feed/TikTokFeed'));
@@ -33,23 +32,14 @@ class TikTokFeedErrorBoundary extends React.Component<
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
-  const { placesSummary } = usePlaces();
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<string | null>(null);
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <MapHeader
         onAddLinkPress={() => {}}
-        places={placesSummary}
-        selectedCategory={selectedCategory}
-        selectedType={selectedType}
-        onCategoryChange={setSelectedCategory}
-        onTypeChange={setSelectedType}
         hideAIButton
         hideNotificationButton
         hideAddButton
-        forceShowFilters
       />
       <TikTokFeedErrorBoundary>
         <Suspense
@@ -60,11 +50,7 @@ export default function SearchScreen() {
             </View>
           }
         >
-          <TikTokFeed
-            selectedCategory={selectedCategory}
-            selectedType={selectedType}
-            tabFocused={isFocused}
-          />
+          <TikTokFeed tabFocused={isFocused} />
         </Suspense>
       </TikTokFeedErrorBoundary>
     </View>

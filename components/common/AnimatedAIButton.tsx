@@ -4,7 +4,12 @@ import Svg, { Path } from 'react-native-svg';
 import { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import Animated from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { darkColor } from '@/constants/theme';
+
+const useGlass = isLiquidGlassAvailable();
+const AI_GRADIENT_COLORS = ['#C7366F', '#7C3AED', '#6D28D9'] as const;
+const AI_GLASS_TINT = '#7C3AED'; // teinte violette pour Liquid Glass
 
 interface AnimatedAIButtonProps {
   onPress: () => void;
@@ -123,16 +128,20 @@ export default function AnimatedAIButton({ onPress, size = 38 }: AnimatedAIButto
         <Animated.View style={styles.dotsBorder} />
       </Animated.View>
       <Animated.View style={[styles.backgroundContainer, buttonAnimatedStyle]}>
-        <LinearGradient
-          colors={['#C7366F', '#7C3AED', '#6D28D9']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.background}
-        />
+        {useGlass ? (
+          <GlassView style={styles.background} tintColor={AI_GLASS_TINT} />
+        ) : (
+          <LinearGradient
+            colors={[...AI_GRADIENT_COLORS]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.background}
+          />
+        )}
       </Animated.View>
       <Animated.View style={[styles.glowContainer, glowAnimatedStyle]}>
         <LinearGradient
-          colors={['#C7366F', '#7C3AED', '#6D28D9']}
+          colors={[...AI_GRADIENT_COLORS]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.glow}

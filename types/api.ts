@@ -149,6 +149,7 @@ export interface PlaceSummary {
   googleRating?: number | null;
   googleUserRatingsTotal?: number | null;
   googlePhotoUrl?: string | null;
+  googlePhone?: string | null;
   notes?: string | null;
   provider: string;
   canonicalUrl: string;

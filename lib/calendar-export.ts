@@ -26,10 +26,59 @@ function parseTimeToDate(dateOnly: string, timeStr: string | null | undefined): 
   return d;
 }
 
+/** Localisation / adresse pour le champ "location" de l'événement (→ preview plan dans le calendrier). */
+function getActivityLocation(activity: PlanActivity): string | undefined {
+  const addr = activity.place?.googleFormattedAddress || activity.place?.address;
+  if (addr) return addr;
+  const name = activity.place?.placeName || activity.place?.rawTitle;
+  const city = activity.place?.city;
+  if (name && city) return `${name}, ${city}`;
+  if (city) return city;
+  return name || undefined;
+}
+
+/** Numéro de téléphone du lieu (si renvoyé par l’API). */
+function getActivityPhone(activity: PlanActivity): string | undefined {
+  const phone = activity.place?.googlePhone;
+  return phone && typeof phone === 'string' ? phone.trim() : undefined;
+}
+
+/** URL du site du lieu. */
+function getActivityUrl(activity: PlanActivity): string | undefined {
+  const url = activity.place?.websiteUrl;
+  return url && typeof url === 'string' ? url.trim() : undefined;
+}
+
+/** Vérifie que lat/lon sont des coordonnées valides (pas 0,0 ni hors plage). */
+function areValidCoords(lat: unknown, lon: unknown): lat is number {
+  if (typeof lat !== 'number' || typeof lon !== 'number') return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  if (lat === 0 && lon === 0) return false;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return false;
+  return true;
+}
+
+/** Lien Apple Maps vers le lieu quand lat/lon sont disponibles et valides. */
+function getMapsLink(activity: PlanActivity): string | undefined {
+  const lat = activity.place?.lat;
+  const lon = activity.place?.lon;
+  if (!areValidCoords(lat, lon)) return undefined;
+  return `https://maps.apple.com/?ll=${lat},${lon}&q=${encodeURIComponent(
+    activity.place?.placeName || activity.place?.rawTitle || 'Lieu'
+  )}`;
+}
+
+/** Notes de l’événement : adresse, tél, URL, notes perso (pour tout avoir sous la main). */
 function buildActivityNotes(activity: PlanActivity): string {
   const addr = activity.place?.googleFormattedAddress || activity.place?.address;
+  const phone = getActivityPhone(activity);
+  const url = getActivityUrl(activity);
+  const mapsLink = getMapsLink(activity);
   const lines: string[] = [];
   if (addr) lines.push(addr);
+  if (phone) lines.push(`Tél: ${phone}`);
+  if (url) lines.push(url);
+  if (mapsLink) lines.push(`Carte: ${mapsLink}`);
   if (activity.notes) lines.push(activity.notes);
   return lines.join('\n');
 }
@@ -106,12 +155,41 @@ export async function exportPlanToCalendar(plan: Plan): Promise<ExportToCalendar
       }
 
       const notes = buildActivityNotes(activity);
+      const location = getActivityLocation(activity);
+      const url = getActivityUrl(activity) || getMapsLink(activity);
+      const timeZone =
+        typeof Intl !== 'undefined' && Intl.DateTimeFormat?.().resolvedOptions?.().timeZone
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : 'Europe/Paris';
+
+      const lat = activity.place?.lat;
+      const lon = activity.place?.lon;
+      const hasCoords = areValidCoords(lat, lon);
+
+      const alarms: Calendar.Alarm[] = [
+        { relativeOffset: -30 },
+        ...(hasCoords && lat != null && lon != null
+          ? [
+              {
+                structuredLocation: {
+                  title: title,
+                  coords: { latitude: lat, longitude: lon },
+                  radius: 100,
+                },
+              } satisfies Calendar.Alarm,
+            ]
+          : []),
+      ];
 
       await Calendar.createEventAsync(defaultCal.id, {
         title,
         startDate,
         endDate,
+        timeZone,
+        location: location || undefined,
+        url: url || undefined,
         notes: notes || undefined,
+        alarms,
       });
       added += 1;
     }
