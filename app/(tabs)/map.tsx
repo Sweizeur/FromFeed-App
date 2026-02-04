@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, Suspense, lazy, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -16,12 +16,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import SlidingCard, { SlidingCardRef } from '@/components/common/SlidingCard';
 import MapHeader, { UpgradePopup } from '@/components/navigation/MapHeader';
-import BottomNav from '@/components/navigation/BottomNav';
 import LinkBottomSheet from '@/components/modals/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
 import PlaceTransition from '@/components/places/PlaceTransition';
 import AddToCollectionModal from '@/components/collections/AddToCollectionModal';
-import CollectionsScreen from './collections';
 import { createLinkPreviewTask, getTaskStatus, deletePlace, type Place, type PlaceSummary } from '@/lib/api';
 
 const PENDING_LINK_TASK_ID = '@fromfeed:pendingLinkTaskId';
@@ -34,35 +32,6 @@ import { useToast } from '@/hooks/useToast';
 import { useShareHandler } from '@/hooks/useShareHandler';
 import { matchesTypeFilter } from '@/utils/typeHierarchy';
 import { darkColor } from '@/constants/theme';
-
-// Lazy load TikTokFeed pour ne pas charger react-native-webview au démarrage (évite crash si le binaire n’a pas été reconstruit)
-const TikTokFeed = lazy(() => import('@/components/feed/TikTokFeed'));
-
-class TikTokFeedErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-  static getDerivedStateFromError = () => ({ hasError: true });
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <Text style={{ fontSize: 16, color: darkColor, textAlign: 'center' }}>
-            Pour afficher les TikToks dans l’app, reconstruisez le binaire natif :
-          </Text>
-          <Text style={{ fontSize: 14, color: '#666', marginTop: 12, textAlign: 'center' }}>
-            npx expo run:ios
-          </Text>
-          <Text style={{ fontSize: 12, color: '#999', marginTop: 8 }}>
-            (ou run:android)
-          </Text>
-        </View>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 const HEADER_WHITE_HEIGHT = 120;
 const BOTTOM_NAV_HEIGHT = 52;
@@ -92,7 +61,6 @@ export default function MapScreen() {
   const [isAddToCollectionModalVisible, setIsAddToCollectionModalVisible] = useState(false);
   const [selectedPlaceForCollection, setSelectedPlaceForCollection] = useState<string | null>(null);
   const [linkInput, setLinkInput] = useState('');
-  const [activeTab, setActiveTab] = useState('map');
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [processingUrl, setProcessingUrl] = useState<string | null>(null);
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
@@ -343,28 +311,23 @@ export default function MapScreen() {
     return { height: HEADER_WHITE_HEIGHT + cardTranslateY.value };
   });
 
-  const showHeader = activeTab === 'map' || activeTab === 'plans' || activeTab === 'search';
-
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.container}>
-        {/* Header (map + search) */}
-        {showHeader && (
-          <MapHeader
-            onLayout={handleHeaderContainerLayout}
-            onAddLinkPress={() => setIsLinkModalVisible(true)}
-            onAIPress={() => router.push('/ai')}
-            places={placesSummary}
-            selectedCategory={selectedCategory}
-            selectedType={selectedType}
-            onCategoryChange={handleCategoryChange}
-            onTypeChange={setSelectedType}
-            onlyFilters={activeTab === 'search'}
-          />
-        )}
+        <MapHeader
+          onLayout={handleHeaderContainerLayout}
+          onAddLinkPress={() => setIsLinkModalVisible(true)}
+          onAIPress={() => router.push('/ai')}
+          places={placesSummary}
+          selectedCategory={selectedCategory}
+          selectedType={selectedType}
+          onCategoryChange={handleCategoryChange}
+          onTypeChange={setSelectedType}
+          onlyFilters={false}
+        />
 
-        {/* Onglet Carte (afficher aussi si activeTab === 'plans' car onglet Planning désactivé) */}
-        {(activeTab === 'map' || activeTab === 'plans') && (
+        {/* Carte + sliding card */}
+        {(
           <>
             <Animated.View style={[styles.mapContainer, mapContainerAnimatedStyle]}>
               <UpgradePopup />
@@ -435,35 +398,6 @@ export default function MapScreen() {
           </>
         )}
 
-        {/* Onglet Recherche - fil TikTok (lazy + ErrorBoundary pour WebView) */}
-        {activeTab === 'search' && (
-          <View style={[styles.searchTabContent, { paddingBottom: BOTTOM_NAV_HEIGHT + insets.bottom }]}>
-            <TikTokFeedErrorBoundary>
-              <Suspense fallback={
-                <View style={styles.centered}>
-                  <ActivityIndicator size="large" color={darkColor} />
-                  <Text style={styles.hint}>Chargement du fil...</Text>
-                </View>
-              }>
-                <TikTokFeed
-                  selectedCategory={selectedCategory}
-                  selectedType={selectedType}
-                />
-              </Suspense>
-            </TikTokFeedErrorBoundary>
-          </View>
-        )}
-
-        {activeTab === 'collections' && <CollectionsScreen activeTab={activeTab} onTabChange={setActiveTab} />}
-        {/* Onglet Planning désactivé
-        {activeTab === 'plans' && <PlansScreen activeTab={activeTab} onTabChange={setActiveTab} />}
-        */}
-        {activeTab === 'settings' && (
-          <View style={styles.tabContent}>
-            <Text style={styles.tabTitle}>Settings</Text>
-          </View>
-        )}
-
         <LinkBottomSheet
           visible={isLinkModalVisible}
           onClose={() => {
@@ -502,7 +436,6 @@ export default function MapScreen() {
         )}
 
         <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
-        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
       </View>
     </TouchableWithoutFeedback>
   );
@@ -512,9 +445,4 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   mapContainer: { position: 'relative', width: '100%' },
   mapLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tabContent: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  tabTitle: { fontSize: 24, fontWeight: '600', color: darkColor },
-  searchTabContent: { flex: 1, backgroundColor: '#f5f5f5' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  hint: { fontSize: 14, color: '#666', marginTop: 8 },
 });

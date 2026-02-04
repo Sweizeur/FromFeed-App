@@ -21,8 +21,11 @@ interface MapHeaderProps {
   onBackPress?: () => void;
   hideAIButton?: boolean;
   hideNotificationButton?: boolean;
+  hideAddButton?: boolean;
   /** Sur l'onglet feed : afficher uniquement les filtres (pas de searchbar, pas de boutons IA/add/notifications) */
   onlyFilters?: boolean;
+  /** Afficher la ligne de filtres même sans places (ex: page Feed) */
+  forceShowFilters?: boolean;
 }
 
 export default function MapHeader({ 
@@ -39,13 +42,15 @@ export default function MapHeader({
   onBackPress,
   hideAIButton = false,
   hideNotificationButton = false,
+  hideAddButton = false,
   onlyFilters = false,
+  forceShowFilters = false,
 }: MapHeaderProps) {
   const insets = useSafeAreaInsets();
   
   // Vérifier s'il y a des places avec des catégories pour afficher les filtres (ou toujours sur feed)
   const hasCategories = places.length > 0 && places.some(place => place.category === 'Restauration' || place.category === 'Activité');
-  const shouldShowFilters = (onlyFilters || (hasCategories && onCategoryChange && onTypeChange)) && onCategoryChange && onTypeChange;
+  const shouldShowFilters = (onlyFilters || forceShowFilters || (hasCategories && onCategoryChange && onTypeChange)) && onCategoryChange && onTypeChange;
   
   return (
     <View style={[styles.headerContainer, (showBackButton || onlyFilters) && { paddingTop: insets.top }]} onLayout={onLayout}>
@@ -95,13 +100,15 @@ export default function MapHeader({
               {onAIPress && !hideAIButton && (
                 <AnimatedAIButton onPress={onAIPress} size={38} />
               )}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.circleButtonPrimary}
-                onPress={onAddLinkPress}
-              >
-                <Ionicons name="add" size={20} color="#fff" />
-              </TouchableOpacity>
+              {!hideAddButton && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.circleButtonPrimary}
+                  onPress={onAddLinkPress}
+                >
+                  <Ionicons name="add" size={20} color="#fff" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -177,6 +184,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 46, // hauteur fixe = AnimatedAIButton 38px + paddingVertical 8 (identique avec ou sans boutons)
     backgroundColor: '#fff',
     borderRadius: 999,
     paddingHorizontal: 16,

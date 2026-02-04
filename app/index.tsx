@@ -72,7 +72,7 @@ export default function SignUpScreen() {
         const refreshed = await refreshSession();
         if (refreshed) {
           // Session valide, rediriger vers home
-          router.replace('/map');
+          router.replace('/(tabs)/map');
           return;
         } else {
           // Session expirée ou erreur réseau, on reste sur l'écran de connexion
@@ -102,7 +102,7 @@ export default function SignUpScreen() {
 
     const fullPhone = `${countryCode} ${phoneNumber}`;
     router.replace({
-      pathname: '/map',
+      pathname: '/(tabs)/map',
       params: { phone: fullPhone },
     });
   };
@@ -115,7 +115,7 @@ export default function SignUpScreen() {
       
       if (result.success && result.data) {
         // Navigation vers la page home après connexion réussie
-        router.replace('/map');
+        router.replace('/(tabs)/map');
       } else {
         // Gérer les erreurs spécifiques
         if (result.errorCode === 'RATE_LIMIT') {

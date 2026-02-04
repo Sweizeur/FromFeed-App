@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Text,
   TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { getPlaceVideosFeed } from '@/lib/api';
@@ -23,18 +24,13 @@ const CARD_HEIGHT = EMBED_HEIGHT + CAPTION_HEIGHT;
 interface TikTokFeedProps {
   selectedCategory: string | null;
   selectedType: string | null;
+  /** false quand l'utilisateur quitte l'onglet Feed → on met en pause la vidéo */
+  tabFocused?: boolean;
 }
 
-const TIKTOK_PLAY_MESSAGE = JSON.stringify({
-  type: 'play',
-  value: null,
-  'x-tiktok-player': true,
-});
-const TIKTOK_PAUSE_MESSAGE = JSON.stringify({
-  type: 'pause',
-  value: null,
-  'x-tiktok-player': true,
-});
+// Objets pour postMessage TikTok (injectés tels quels : pas de JSON.parse, sinon "[object Object]")
+const TIKTOK_PLAY_OBJ = { type: 'play', value: null, 'x-tiktok-player': true };
+const TIKTOK_PAUSE_OBJ = { type: 'pause', value: null, 'x-tiktok-player': true };
 
 function TikTokEmbedBlock({
   video,
@@ -47,43 +43,66 @@ function TikTokEmbedBlock({
   const hasLoadedRef = React.useRef(false);
   const isActiveRef = React.useRef(isActive);
   isActiveRef.current = isActive;
-  // Embed Player officiel TikTok (player/v1) — pas d'autoplay : on reste en pause par défaut, lecture uniquement quand la carte est visible
-  const embedUri = `https://www.tiktok.com/player/v1/${video.videoId}?loop=1&controls=0`;
+  // Pas d'autoplay dans l'URL : seule la carte visible reçoit play via injectPlay()
+  const embedUri = `https://www.tiktok.com/player/v1/${video.videoId}?loop=1&controls=1`;
 
   const injectPlay = useCallback(() => {
+    const obj = JSON.stringify(TIKTOK_PLAY_OBJ);
     webViewRef.current?.injectJavaScript(
       `(function(){
-        function setPlaysInline(){
-          var v=document.querySelectorAll('video');
-          for(var i=0;i<v.length;i++){
-            v[i].setAttribute('playsinline','true');
-            v[i].setAttribute('webkit-playsinline','true');
-            v[i].playsInline=true;
-          }
+        var obj = ${obj};
+        function run(){
+          try {
+            var iframes = document.querySelectorAll('iframe');
+            for (var i = 0; i < iframes.length; i++) {
+              if (iframes[i].contentWindow) iframes[i].contentWindow.postMessage(obj, '*');
+            }
+            if (typeof window.dispatchEvent === 'function') {
+              window.dispatchEvent(new MessageEvent('message', { data: obj }));
+            }
+            window.postMessage(obj, '*');
+            var v = document.querySelector('video');
+            if (v) {
+              v.setAttribute('playsinline', 'true');
+              v.setAttribute('webkit-playsinline', 'true');
+              if (v.play) v.play().catch(function(){});
+            }
+          }catch(e){}
         }
-        try {
-          setPlaysInline();
-          var m=${TIKTOK_PLAY_MESSAGE};
-          window.postMessage(m,'*');
-          setTimeout(setPlaysInline, 400);
-        }catch(e){}
+        run();
+        setTimeout(run, 400);
       })();true;`
     );
   }, []);
 
   const injectPause = useCallback(() => {
+    const obj = JSON.stringify(TIKTOK_PAUSE_OBJ);
     webViewRef.current?.injectJavaScript(
-      `(function(){try{var m=${TIKTOK_PAUSE_MESSAGE};window.postMessage(m,'*');}catch(e){}})();true;`
+      `(function(){
+        var obj = ${obj};
+        try {
+          var iframes = document.querySelectorAll('iframe');
+          for (var i = 0; i < iframes.length; i++) {
+            if (iframes[i].contentWindow) iframes[i].contentWindow.postMessage(obj, '*');
+          }
+          if (typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new MessageEvent('message', { data: obj }));
+          }
+          window.postMessage(obj, '*');
+          var v = document.querySelector('video');
+          if (v && v.pause) v.pause();
+        }catch(e){}
+      })();true;`
     );
   }, []);
 
   const handleLoadEnd = useCallback(() => {
     hasLoadedRef.current = true;
-    // Par défaut : mettre en pause (même si le player a autoplay côté TikTok)
-    setTimeout(() => injectPause(), 200);
-    // Si cette carte est déjà visible, lancer la lecture après un court délai
     if (isActiveRef.current) {
-      setTimeout(() => injectPlay(), 800);
+      setTimeout(() => injectPlay(), 600);
+      setTimeout(() => injectPlay(), 1400);
+    } else {
+      setTimeout(() => injectPause(), 200);
     }
   }, [injectPlay, injectPause]);
 
@@ -97,6 +116,23 @@ function TikTokEmbedBlock({
     }
   }, [isActive, injectPlay, injectPause]);
 
+  const handleShouldStartLoad = useCallback((request: { url: string }) => {
+    const url = request.url;
+    const isHttp = url.startsWith('http://') || url.startsWith('https://');
+    const isTikTokRedirect =
+      url.includes('onelink.me') ||
+      url.includes('snssdk1233') ||
+      url.startsWith('tiktok://') ||
+      url.startsWith('snssdk1233://');
+    if (isHttp && !isTikTokRedirect) {
+      return true;
+    }
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) Linking.openURL(url);
+    }).catch(() => {});
+    return false;
+  }, []);
+
   return (
     <View style={styles.card}>
       <WebView
@@ -109,6 +145,7 @@ function TikTokEmbedBlock({
         domStorageEnabled
         startInLoadingState
         onLoadEnd={handleLoadEnd}
+        onShouldStartLoadWithRequest={handleShouldStartLoad}
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         renderLoading={() => (
@@ -128,7 +165,7 @@ function TikTokEmbedBlock({
   );
 }
 
-export default function TikTokFeed({ selectedCategory, selectedType }: TikTokFeedProps) {
+export default function TikTokFeed({ selectedCategory, selectedType, tabFocused = true }: TikTokFeedProps) {
   const [videos, setVideos] = useState<PlaceVideoFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -203,7 +240,7 @@ export default function TikTokFeed({ selectedCategory, selectedType }: TikTokFee
     >
       {videos.map((video, index) => (
         <View key={video.id} style={[styles.slide, { width: CARD_WIDTH, height: CARD_HEIGHT }]}>
-          <TikTokEmbedBlock video={video} isActive={index === activeIndex} />
+          <TikTokEmbedBlock video={video} isActive={tabFocused && index === activeIndex} />
         </View>
       ))}
     </ScrollView>

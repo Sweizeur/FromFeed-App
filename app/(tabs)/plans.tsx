@@ -5,7 +5,6 @@ import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BottomNav from '@/components/navigation/BottomNav';
 import PlanForm from '@/components/plans/PlanForm';
 import TimelineRow from '@/components/plans/TimelineRow';
 import EventCard from '@/components/plans/EventCard';
@@ -841,7 +840,6 @@ export default function PlansScreen({ activeTab: propActiveTab, onTabChange: pro
         />
       )}
 
-      {!propActiveTab && <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />}
     </View>
   );
 }

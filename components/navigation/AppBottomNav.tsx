@@ -15,10 +15,10 @@ export default function AppBottomNav({ activeTab }: AppBottomNavProps) {
   const router = useRouter();
 
   const handleTabChange = (tab: string) => {
-    if (tab === 'map' || tab === 'search') router.push('/map');
-    else if (tab === 'plans') router.push('/plans');
-    else if (tab === 'collections') router.push('/collections');
-    else if (tab === 'settings') router.push('/settings');
+    if (tab === 'map') router.replace('/(tabs)/map');
+    else if (tab === 'search') router.replace('/(tabs)/search');
+    else if (tab === 'collections') router.replace('/(tabs)/collections');
+    else if (tab === 'settings') router.replace('/(tabs)/settings');
   };
 
   return (

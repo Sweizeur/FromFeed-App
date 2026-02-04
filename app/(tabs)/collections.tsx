@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AppBottomNav from '@/components/navigation/AppBottomNav';
 import CollectionCard from '@/components/groups/CollectionCard';
 import CreateCollectionModal from '@/components/groups/CreateCollectionModal';
 import { getCollections } from '@/lib/api';
@@ -194,9 +193,6 @@ export default function CollectionsScreen({ activeTab: propActiveTab, onTabChang
           )}
         </ScrollView>
       )}
-
-      {/* Bottom Navigation - seulement si CollectionsScreen est utilisé comme page standalone */}
-      {!propActiveTab && <AppBottomNav activeTab="collections" />}
 
       {/* Modal */}
       <CreateCollectionModal

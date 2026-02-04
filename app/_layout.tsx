@@ -16,12 +16,11 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
-              <Stack.Screen name="map" />
-              <Stack.Screen name="plans" />
-              <Stack.Screen name="collections" />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="groups" />
               <Stack.Screen name="group-detail" />
               <Stack.Screen name="collection-detail" />
-              <Stack.Screen name="settings" />
+              <Stack.Screen name="ai" />
             </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>
