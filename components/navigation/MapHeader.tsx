@@ -2,13 +2,10 @@ import React from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity, Text, LayoutChangeEvent, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import PlaceFilters from '../places/PlaceFilters';
 import { PlaceSummary } from '@/types/api';
 import { darkColor } from '@/constants/theme';
 import AnimatedAIButton from '../common/AnimatedAIButton';
-
-const useGlass = isLiquidGlassAvailable();
 
 interface MapHeaderProps {
   onLayout?: (event: LayoutChangeEvent) => void;
@@ -93,35 +90,23 @@ export default function MapHeader({
               />
             </View>
 
-            {/* Boutons à droite (Liquid Glass sur iOS 26+, fallback couleur sinon) */}
+            {/* Boutons à droite */}
             <View style={styles.searchActions}>
               {!hideNotificationButton && (
-                <TouchableOpacity activeOpacity={0.7} onPress={() => {}}>
-                  {useGlass ? (
-                    <GlassView style={styles.circleButtonBase} tintColor="#F3F3F3">
-                      <Ionicons name="notifications-outline" size={18} color={darkColor} />
-                    </GlassView>
-                  ) : (
-                    <View style={[styles.circleButtonBase, styles.circleButtonLightBg]}>
-                      <Ionicons name="notifications-outline" size={18} color={darkColor} />
-                    </View>
-                  )}
+                <TouchableOpacity activeOpacity={0.7} onPress={() => {}} style={styles.circleButtonLight}>
+                  <Ionicons name="notifications-outline" size={18} color={darkColor} />
                 </TouchableOpacity>
               )}
               {onAIPress && !hideAIButton && (
                 <AnimatedAIButton onPress={onAIPress} size={38} />
               )}
               {!hideAddButton && (
-                <TouchableOpacity activeOpacity={0.7} onPress={onAddLinkPress}>
-                  {useGlass ? (
-                    <GlassView style={styles.circleButtonBase} tintColor="#1A1A1A">
-                      <Ionicons name="add" size={20} color="#fff" />
-                    </GlassView>
-                  ) : (
-                    <View style={[styles.circleButtonBase, styles.circleButtonPrimaryBg]}>
-                      <Ionicons name="add" size={20} color="#fff" />
-                    </View>
-                  )}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.circleButtonPrimary}
+                  onPress={onAddLinkPress}
+                >
+                  <Ionicons name="add" size={20} color="#fff" />
                 </TouchableOpacity>
               )}
             </View>
@@ -231,18 +216,21 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     gap: 10,
   },
-  circleButtonBase: {
+  circleButtonLight: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: '#F3F3F3',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  circleButtonLightBg: {
-    backgroundColor: '#F3F3F3',
-  },
-  circleButtonPrimaryBg: {
+  circleButtonPrimary: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#1A1A1A',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
