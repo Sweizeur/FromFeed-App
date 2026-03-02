@@ -13,7 +13,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import SlidingCard, { SlidingCardRef } from '@/components/common/SlidingCard';
-import MapHeader, { UpgradePopup } from '@/components/navigation/MapHeader';
+import MapHeader from '@/components/navigation/MapHeader';
 import PlaceTransition from '@/components/places/PlaceTransition';
 import AddToCollectionModal from '@/components/collections/AddToCollectionModal';
 import AddPlacesToCollectionModal from '@/components/collections/AddPlacesToCollectionModal';
@@ -234,8 +234,6 @@ export default function CollectionDetailScreen() {
 
         {/* Carte */}
         <Animated.View style={[styles.mapContainer, mapContainerAnimatedStyle]}>
-          <UpgradePopup />
-          
           {loadingLocation && (
             <View style={styles.mapLoading}>
               <ActivityIndicator size="large" color={darkColor} />

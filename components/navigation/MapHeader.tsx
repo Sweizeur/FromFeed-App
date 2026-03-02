@@ -26,6 +26,14 @@ interface MapHeaderProps {
   onlyFilters?: boolean;
   /** Afficher la ligne de filtres même sans places (ex: page Feed) */
   forceShowFilters?: boolean;
+  /** Valeur de la barre de recherche (mode contrôlé, ex. onglet Feed) */
+  searchValue?: string;
+  /** Callback quand le texte de recherche change */
+  onSearchChangeText?: (text: string) => void;
+  /** Placeholder de la barre de recherche */
+  searchPlaceholder?: string;
+  /** Appelé quand l'utilisateur valide la recherche (Entrée) */
+  onSearchSubmit?: () => void;
 }
 
 export default function MapHeader({ 
@@ -45,6 +53,10 @@ export default function MapHeader({
   hideAddButton = false,
   onlyFilters = false,
   forceShowFilters = false,
+  searchValue,
+  onSearchChangeText,
+  searchPlaceholder = 'Search here...',
+  onSearchSubmit,
 }: MapHeaderProps) {
   const insets = useSafeAreaInsets();
   
@@ -83,9 +95,13 @@ export default function MapHeader({
                 style={styles.searchIcon}
               />
               <TextInput
-                placeholder="Search here..."
+                placeholder={searchPlaceholder}
                 placeholderTextColor="#B0B0B0"
                 style={styles.searchInput}
+                value={onSearchChangeText != null ? searchValue ?? '' : undefined}
+                onChangeText={onSearchChangeText}
+                onSubmitEditing={onSearchSubmit}
+                blurOnSubmit
                 onBlur={() => Keyboard.dismiss()}
               />
             </View>

@@ -8,9 +8,9 @@ import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
 export default function TabsLayout() {
   return (
     <NativeTabs>
-      <NativeTabs.Trigger name="search">
-        <Icon sf="magnifyingglass" />
-        <Label>Feed</Label>
+      <NativeTabs.Trigger name="ai">
+        <Icon sf="sparkles" />
+        <Label>IA</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="map">
         <Icon sf="map.fill" />
@@ -23,6 +23,10 @@ export default function TabsLayout() {
       <NativeTabs.Trigger name="settings">
         <Icon sf="gearshape.fill" />
         <Label>Profil</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="search" role="search">
+        <Icon sf="magnifyingglass" />
+        <Label>Search</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

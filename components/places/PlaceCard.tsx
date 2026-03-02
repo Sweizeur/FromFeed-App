@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Image } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, Image, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Place, PlaceSummary } from '@/types/api';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 interface PlaceCardProps {
   place: Place | PlaceSummary;
@@ -13,14 +13,44 @@ interface PlaceCardProps {
   isInCollection?: boolean;
 }
 
-const PlaceCard = React.memo(function PlaceCard({ 
-  place, 
-  onPress, 
-  isSelectionMode = false, 
-  isSelected = false, 
-  onAddToCollection, 
-  isInCollection = false 
+const PlaceCard = React.memo(function PlaceCard({
+  place,
+  onPress,
+  isSelectionMode = false,
+  isSelected = false,
+  onAddToCollection,
+  isInCollection = false,
 }: PlaceCardProps) {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
+
+  const themed = useMemo(
+    () =>
+      isDark
+        ? {
+            container: { backgroundColor: '#252628', shadowColor: '#000' },
+            imagePlaceholder: { backgroundColor: '#1C1D1E' },
+            name: { color: theme.text },
+            address: { color: theme.icon },
+            categoryText: { color: theme.text, backgroundColor: '#3C3E40' },
+            notes: { color: theme.icon },
+            personalRating: { color: theme.text },
+            rating: { color: theme.text },
+            addToCollectionButtonTop: { backgroundColor: '#3C3E40' },
+            addToCollectionButtonText: { color: theme.text },
+            containerSelected: { backgroundColor: '#2C2E30', borderColor: theme.tint, shadowColor: '#000' },
+            checkbox: { borderColor: '#555', backgroundColor: '#252628' },
+            checkboxSelected: { backgroundColor: theme.tint, borderColor: theme.tint },
+          }
+        : {},
+    [isDark, theme]
+  );
+
+  const iconColor = isDark ? theme.icon : '#666';
+  const starColor = isDark ? theme.text : '#1A1A1A';
+  const chevronColor = isDark ? theme.icon : '#CCC';
+
   const displayName = place.placeName || place.rawTitle || 'Lieu sans nom';
   const displayAddress = place.googleFormattedAddress || place.address || place.city || 'Adresse non disponible';
   const rating = place.googleRating;
@@ -35,8 +65,9 @@ const PlaceCard = React.memo(function PlaceCard({
     <TouchableOpacity
       style={[
         styles.container,
+        themed.container,
         isSelectionMode && styles.containerSelectionMode,
-        isSelectionMode && isSelected && styles.containerSelected
+        isSelectionMode && isSelected && (isDark ? themed.containerSelected : styles.containerSelected),
       ]}
       onPress={onPress}
       activeOpacity={isSelectionMode ? 0.6 : 0.7}
@@ -49,48 +80,48 @@ const PlaceCard = React.memo(function PlaceCard({
           resizeMode="cover"
         />
       ) : (
-        <View style={styles.imagePlaceholder}>
-          <Ionicons name="location" size={24} color="#999" />
+        <View style={[styles.imagePlaceholder, themed.imagePlaceholder]}>
+          <Ionicons name="location" size={24} color={iconColor} />
         </View>
       )}
 
       {/* Contenu */}
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text style={[styles.name, themed.name]} numberOfLines={1}>
             {displayName}
           </Text>
           <View style={styles.ratingsContainer}>
             {place.userRating && (
               <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={14} color="#1A1A1A" />
-                <Text style={styles.personalRating}>{place.userRating}</Text>
+                <Ionicons name="star" size={14} color={starColor} />
+                <Text style={[styles.personalRating, themed.personalRating]}>{place.userRating}</Text>
               </View>
             )}
             {rating && (
               <View style={styles.ratingContainer}>
                 <Ionicons name="star" size={14} color="#FFD700" />
-                <Text style={styles.rating}>{rating.toFixed(1)}</Text>
+                <Text style={[styles.rating, themed.rating]}>{rating.toFixed(1)}</Text>
               </View>
             )}
           </View>
         </View>
 
         <View style={styles.addressContainer}>
-          <Ionicons name="location-outline" size={14} color="#666" />
-          <Text style={styles.address} numberOfLines={1}>
+          <Ionicons name="location-outline" size={14} color={iconColor} />
+          <Text style={[styles.address, themed.address]} numberOfLines={1}>
             {displayAddress}
           </Text>
         </View>
 
         {place.type && (
           <View style={styles.categoryContainer}>
-            <Text style={styles.categoryText}>{place.type}</Text>
+            <Text style={[styles.categoryText, themed.categoryText]}>{place.type}</Text>
           </View>
         )}
 
         {place.notes && (
-          <Text style={styles.notes} numberOfLines={2}>
+          <Text style={[styles.notes, themed.notes]} numberOfLines={2}>
             {place.notes}
           </Text>
         )}
@@ -98,15 +129,15 @@ const PlaceCard = React.memo(function PlaceCard({
         {/* Bouton ajouter/modifier collection */}
         {onAddToCollection && !isSelectionMode && (
           <TouchableOpacity
-            style={styles.addToCollectionButtonTop}
+            style={[styles.addToCollectionButtonTop, themed.addToCollectionButtonTop]}
             onPress={(e) => {
               e.stopPropagation();
               onAddToCollection();
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name={isInCollection ? "bookmark" : "bookmark-outline"} size={16} color={darkColor} />
-            <Text style={styles.addToCollectionButtonText}>
+            <Ionicons name={isInCollection ? "bookmark" : "bookmark-outline"} size={16} color={theme.text} />
+            <Text style={[styles.addToCollectionButtonText, themed.addToCollectionButtonText]}>
               {isInCollection ? "Modifier" : "Ajouter à une collection"}
             </Text>
           </TouchableOpacity>
@@ -137,16 +168,22 @@ const PlaceCard = React.memo(function PlaceCard({
       {/* Actions - conteneur fixe pour éviter le décalage */}
       <View style={styles.rightIconContainer}>
         {isSelectionMode ? (
-          <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+          <View
+            style={[
+              styles.checkbox,
+              themed.checkbox,
+              isSelected && (isDark ? themed.checkboxSelected : styles.checkboxSelected),
+            ]}
+          >
             {isSelected && (
               <View style={styles.checkboxInner}>
-                <Ionicons name="checkmark" size={10} color="#fff" />
+                <Ionicons name="checkmark" size={10} color={isDark ? theme.background : '#fff'} />
               </View>
             )}
           </View>
         ) : (
           <View style={styles.actionsContainer}>
-            <Ionicons name="chevron-forward" size={20} color="#CCC" />
+            <Ionicons name="chevron-forward" size={20} color={chevronColor} />
           </View>
         )}
       </View>

@@ -77,11 +77,14 @@ export interface PlaceVideo {
 /** Élément du fil vidéo (place_videos) pour l’onglet Recherche */
 export interface PlaceVideoFeedItem {
   id: string;
+  provider?: 'tiktok' | 'instagram';
   videoId: string;
   canonicalUrl: string;
   rawTitle?: string | null;
+  rawDescription?: string | null;
   placeId: string;
   placeName?: string | null;
+  placeAddress?: string | null;
   category?: string | null;
   type?: string | null;
 }
@@ -156,6 +159,7 @@ export interface PlaceSummary {
   websiteUrl?: string | null;
   category?: string | null;
   type?: string | null;
+  markerEmoji?: string | null; // Emoji pour le marqueur carte (ex: 🍣, ☕). Sinon pin par défaut.
   userRating?: number | null; // Note personnelle de l'utilisateur (1 à 5)
   collectionIds?: string[]; // IDs des collections contenant ce lieu
 }

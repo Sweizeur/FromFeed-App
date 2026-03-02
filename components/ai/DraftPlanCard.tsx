@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 interface DraftPlanActivity {
   placeName: string;
@@ -25,9 +25,20 @@ interface DraftPlan {
 interface DraftPlanCardProps {
   draftPlan: DraftPlan;
   onAddToCalendar: (draftPlan: DraftPlan) => void | Promise<void>;
+  colorScheme?: 'light' | 'dark';
 }
 
-export default function DraftPlanCard({ draftPlan, onAddToCalendar }: DraftPlanCardProps) {
+const cardBg = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#2C2E30' : '#F9F9F9');
+const cardBorder = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : '#E0E0E0');
+const mutedColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#9BA1A6' : '#666');
+const textColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? Colors.dark.text : darkColor);
+
+export default function DraftPlanCard({ draftPlan, onAddToCalendar, colorScheme = 'light' }: DraftPlanCardProps) {
+  const bg = cardBg(colorScheme);
+  const border = cardBorder(colorScheme);
+  const muted = mutedColor(colorScheme);
+  const text = textColor(colorScheme);
+
   const handleCalendarPress = () => {
     Alert.alert(
       'Ajouter au calendrier',
@@ -41,17 +52,17 @@ export default function DraftPlanCard({ draftPlan, onAddToCalendar }: DraftPlanC
 
   return (
     <>
-      <View style={styles.draftPlanContainer}>
-        <Text style={styles.draftPlanTitle}>
+      <View style={[styles.draftPlanContainer, { backgroundColor: bg, borderColor: border }]}>
+        <Text style={[styles.draftPlanTitle, { color: text }]}>
           {draftPlan.title || 'Plan proposé'}
         </Text>
         {draftPlan.date && (
-          <Text style={styles.draftPlanDate}>
+          <Text style={[styles.draftPlanDate, { color: muted }]}>
             Date: {draftPlan.date}
           </Text>
         )}
         {draftPlan.notes && (
-          <Text style={styles.draftPlanNotes}>
+          <Text style={[styles.draftPlanNotes, { color: muted }]}>
             {draftPlan.notes}
           </Text>
         )}
@@ -61,6 +72,7 @@ export default function DraftPlanCard({ draftPlan, onAddToCalendar }: DraftPlanC
               key={index} 
               style={[
                 styles.draftPlanActivity,
+                { borderBottomColor: border },
                 index === draftPlan.activities.length - 1 && styles.draftPlanActivityLast,
                 activity.closedAtRequestedTime && styles.draftPlanActivityClosed,
                 activity.openingHoursUnknown && styles.draftPlanActivityHoursUnknown,
@@ -68,20 +80,21 @@ export default function DraftPlanCard({ draftPlan, onAddToCalendar }: DraftPlanC
             >
               <Text style={[
                 styles.draftPlanActivityName,
+                { color: text },
                 activity.closedAtRequestedTime && styles.draftPlanActivityNameClosed,
                 activity.openingHoursUnknown && styles.draftPlanActivityNameHoursUnknown,
               ]}>
                 {activity.order + 1}. {activity.placeName}
               </Text>
               {(activity.startTime || activity.endTime) && (
-                <Text style={styles.draftPlanActivityTime}>
+                <Text style={[styles.draftPlanActivityTime, { color: muted }]}>
                   {activity.startTime && activity.endTime 
                     ? `${activity.startTime} - ${activity.endTime}`
                     : activity.startTime || activity.endTime}
                 </Text>
               )}
               {activity.notes && (
-                <Text style={styles.draftPlanActivityNotes}>
+                <Text style={[styles.draftPlanActivityNotes, { color: muted }]}>
                   {activity.notes}
                 </Text>
               )}
@@ -94,7 +107,7 @@ export default function DraftPlanCard({ draftPlan, onAddToCalendar }: DraftPlanC
           style={styles.draftPlanButton}
           onPress={handleCalendarPress}
         >
-          <Ionicons name="calendar-outline" size={22} color={darkColor} />
+          <Ionicons name="calendar-outline" size={22} color={text} />
         </TouchableOpacity>
       </View>
     </>
@@ -156,7 +169,6 @@ const styles = StyleSheet.create({
   draftPlanActivityName: {
     fontSize: 15,
     fontWeight: '600',
-    color: darkColor,
     marginBottom: 4,
   },
   draftPlanActivityNameClosed: {

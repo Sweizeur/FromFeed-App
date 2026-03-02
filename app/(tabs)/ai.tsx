@@ -5,10 +5,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  useColorScheme,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Colors } from '@/constants/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import { getConversation, getPlaceDetails } from '@/lib/api';
@@ -155,8 +157,15 @@ function extractDraftPlan(content: string): { cleanContent: string; draftPlan?: 
   return { cleanContent: content };
 }
 
+const TAB_BAR_MIN_HEIGHT = 49;
+
 export default function AIPage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
+  const contentPaddingBottom = 16 + Math.max(insets.bottom, TAB_BAR_MIN_HEIGHT);
+
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -165,10 +174,15 @@ export default function AIPage() {
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; name: string; uri?: string }>>([]);
   const [showConversationsModal, setShowConversationsModal] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
-  
+  const conversationTitleRef = React.useRef<string | null>(null);
+
   // Animation pour le titre
   const titleOpacity = useSharedValue(1);
   const titleScale = useSharedValue(1);
+
+  useEffect(() => {
+    conversationTitleRef.current = conversationTitle;
+  }, [conversationTitle]);
 
   // Charger le conversationId et le cache depuis AsyncStorage au montage
   useEffect(() => {
@@ -406,7 +420,10 @@ export default function AIPage() {
               try {
                 const convResult = await getConversation(newConversationId);
                 if (convResult.success && convResult.conversation?.title) {
-                  animateTitleChange(convResult.conversation.title);
+                  const newTitle = convResult.conversation.title;
+                  if (newTitle !== conversationTitleRef.current) {
+                    animateTitleChange(newTitle);
+                  }
                   clearInterval(checkTitle);
                 } else if (attempts >= maxAttempts) {
                   clearInterval(checkTitle);
@@ -520,11 +537,11 @@ export default function AIPage() {
   }));
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? -24 : 0}
       >
         <AIHeader
           conversationTitle={conversationTitle}
@@ -532,10 +549,11 @@ export default function AIPage() {
           onShowConversations={() => setShowConversationsModal(true)}
           hasMessages={messages.length > 0}
           onNewMessage={handleNewMessage}
+          colorScheme={colorScheme ?? 'light'}
         />
 
         {/* Content */}
-        <View style={styles.content}>
+        <View style={[styles.content, { paddingBottom: contentPaddingBottom }]}>
           {/* Interface de chat */}
           {(messages.length > 0 || isLoading) ? (
             <ScrollView
@@ -553,12 +571,13 @@ export default function AIPage() {
                   message.role === 'assistant' &&
                   message.content === '';
                 if (showLoader) {
-                  return <AILoadingIndicator key={message.id} />;
+                  return <AILoadingIndicator key={message.id} colorScheme={colorScheme ?? 'light'} />;
                 }
                 return (
                 <AIMessage
                   key={message.id}
                   message={message}
+                  colorScheme={colorScheme ?? 'light'}
                   onAddToCalendar={async (draftPlan) => {
                     const plan = draftPlanToPlan(draftPlan);
                     const planWithDetails = await enrichPlanWithPlaceDetails(plan);
@@ -589,6 +608,7 @@ export default function AIPage() {
               onSuggestionPress={handleSuggestionPress}
               attachedFiles={attachedFiles}
               onRemoveFile={(fileId) => setAttachedFiles(prev => prev.filter(f => f.id !== fileId))}
+              colorScheme={colorScheme ?? 'light'}
             />
           )}
 
@@ -602,6 +622,7 @@ export default function AIPage() {
               attachedFiles={attachedFiles}
               onRemoveFile={(fileId) => setAttachedFiles(prev => prev.filter(f => f.id !== fileId))}
               placeholder="Continuer la conversation..."
+              colorScheme={colorScheme ?? 'light'}
             />
           )}
         </View>
@@ -612,6 +633,7 @@ export default function AIPage() {
           onClose={() => setShowConversationsModal(false)}
           onSelectConversation={handleSelectConversation}
           currentConversationId={conversationId}
+          colorScheme={colorScheme ?? 'light'}
           onCurrentConversationDeleted={() => {
             // Réinitialiser l'état pour revenir à l'empty state
             const deletedConversationId = conversationId;
@@ -639,7 +661,6 @@ export default function AIPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   keyboardView: {
     flex: 1,
@@ -654,6 +675,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   chatContent: {
+    paddingTop: 16,
     paddingBottom: 16,
     paddingRight: 8,
   },

@@ -7,6 +7,7 @@ import type { Place, PlaceSummary } from '@/types/api';
 
 const DISTANCE_THRESHOLD = 100; // Seuil de distance pour déclencher l'effet de dézoom/rezoom (100 km)
 const ANIMATION_DURATION = 1000; // Durée fixe de l'animation en ms
+const PROGRAMMATIC_GRACE_MS = 1500; // Fenêtre pour ignorer onRegionChangeComplete après une animation
 
 /**
  * Hook pour gérer la carte (localisation, région, animations)
@@ -17,6 +18,8 @@ export function useMap() {
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const mapViewRef = useRef<MapView>(null);
+  const lastProgrammaticAt = useRef<number>(0);
+  const watchSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
 
   /**
    * Charge la localisation de l'utilisateur
@@ -81,7 +84,7 @@ export function useMap() {
         // Obtenir la région actuelle de la carte
         const camera = await mapViewRef.current.getCamera();
         if (!camera || !camera.center || !mapViewRef.current) {
-          // Fallback : animation normale sans vérification de distance
+          lastProgrammaticAt.current = Date.now();
           mapViewRef.current?.animateToRegion(
             {
               latitude: placeLat,
@@ -104,7 +107,7 @@ export function useMap() {
           !isFinite(currentLat) ||
           !isFinite(currentLon)
         ) {
-          // Fallback : animation normale
+          lastProgrammaticAt.current = Date.now();
           mapViewRef.current.animateToRegion(
             {
               latitude: placeLat,
@@ -134,7 +137,7 @@ export function useMap() {
             !isFinite(midLon) ||
             !mapViewRef.current
           ) {
-            // Fallback : animation normale
+            lastProgrammaticAt.current = Date.now();
             mapViewRef.current.animateToRegion(
               {
                 latitude: placeLat,
@@ -147,7 +150,7 @@ export function useMap() {
             return;
           }
 
-          // Étape 1 : Dézoomer pour voir une zone plus large
+          lastProgrammaticAt.current = Date.now();
           mapViewRef.current.animateToRegion(
             {
               latitude: midLat,
@@ -161,6 +164,7 @@ export function useMap() {
           // Étape 2 : Après le dézoom, animer vers le lieu avec zoom normal
           setTimeout(() => {
             if (mapViewRef.current) {
+              lastProgrammaticAt.current = Date.now();
               mapViewRef.current.animateToRegion(
                 {
                   latitude: placeLat,
@@ -173,7 +177,7 @@ export function useMap() {
             }
           }, ANIMATION_DURATION + 100); // Délai pour laisser le temps au dézoom de se terminer
         } else {
-          // Petite distance : animation normale
+          lastProgrammaticAt.current = Date.now();
           mapViewRef.current.animateToRegion(
             {
               latitude: placeLat,
@@ -186,8 +190,8 @@ export function useMap() {
         }
       } catch (error) {
         __DEV__ && console.error('[useMap] Erreur lors de la récupération de la caméra:', error);
-        // Fallback si getCamera échoue : animation normale
         if (mapViewRef.current) {
+          lastProgrammaticAt.current = Date.now();
           mapViewRef.current.animateToRegion(
             {
               latitude: placeLat,
@@ -203,10 +207,93 @@ export function useMap() {
     []
   );
 
+  /** À appeler avant toute animation programmatique pour ignorer le prochain onRegionChangeComplete */
+  const markProgrammaticAnimation = useCallback(() => {
+    lastProgrammaticAt.current = Date.now();
+  }, []);
+
+  /** true si le dernier changement de région était une animation (pas un geste utilisateur) */
+  const isProgrammaticChange = useCallback(() => {
+    return Date.now() - lastProgrammaticAt.current < PROGRAMMATIC_GRACE_MS;
+  }, []);
+
+  /**
+   * Centre la carte sur la position de l'utilisateur
+   */
+  const animateToUser = useCallback(async () => {
+    if (!location || !mapViewRef.current) return;
+    markProgrammaticAnimation();
+    mapViewRef.current.animateToRegion(
+      {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      },
+      ANIMATION_DURATION
+    );
+  }, [location, markProgrammaticAnimation]);
+
+  /**
+   * Active le suivi en continu : la carte se recentre à chaque déplacement de l'utilisateur.
+   * Options proches Waze / Google Maps : précision navigation + mises à jour très rapprochées.
+   * (activityType est réservé aux tâches background dans expo-location, pas à watchPositionAsync.)
+   */
+  const startWatchingUser = useCallback(async () => {
+    if (watchSubscriptionRef.current) return;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      const sub = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.BestForNavigation,
+          distanceInterval: 1,
+          timeInterval: 500,
+        },
+        (newLocation) => {
+          setLocation(newLocation);
+          if (!mapViewRef.current) return;
+          markProgrammaticAnimation();
+          mapViewRef.current.animateToRegion(
+            {
+              latitude: newLocation.coords.latitude,
+              longitude: newLocation.coords.longitude,
+              latitudeDelta: 0.02,
+              longitudeDelta: 0.02,
+            },
+            ANIMATION_DURATION
+          );
+        }
+      );
+      watchSubscriptionRef.current = sub;
+    } catch (e) {
+      __DEV__ && console.error('[useMap] watchPositionAsync error:', e);
+    }
+  }, [markProgrammaticAnimation]);
+
+  /**
+   * Arrête le suivi en continu de la position.
+   */
+  const stopWatchingUser = useCallback(() => {
+    if (watchSubscriptionRef.current) {
+      watchSubscriptionRef.current.remove();
+      watchSubscriptionRef.current = null;
+    }
+  }, []);
+
   // Charger la localisation au montage
   useEffect(() => {
     loadLocation();
   }, [loadLocation]);
+
+  useEffect(() => {
+    return () => {
+      if (watchSubscriptionRef.current) {
+        watchSubscriptionRef.current.remove();
+        watchSubscriptionRef.current = null;
+      }
+    };
+  }, []);
 
   return {
     location,
@@ -215,7 +302,11 @@ export function useMap() {
     errorMsg,
     mapViewRef,
     animateToPlace,
+    animateToUser,
     loadLocation,
+    startWatchingUser,
+    stopWatchingUser,
+    isProgrammaticChange,
   };
 }
 

@@ -27,7 +27,8 @@ interface SlidingCardProps {
    */
   headerWhiteHeight?: number;
   /**
-   * Hauteur de la navbar en bas (pour que la carte ne passe pas en dessous)
+   * Hauteur de la navbar en bas. La carte s'étend jusqu'en bas de l'écran (pas de trou) ;
+   * le contenu a un paddingBottom égal pour ne pas être masqué par la navbar.
    * Par défaut: 0
    */
   bottomNavHeight?: number;
@@ -143,9 +144,8 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
     ? (propHeaderWhiteHeight + (propHeaderHeight ? 0 : insets.top))
     : totalHeaderH; // Par défaut, utilise totalHeaderH si non spécifié
 
-  // Hauteur de la carte : utilise headerWhiteH pour que la carte passe par-dessus le header vert
-  // Soustraire bottomNavHeight pour que la carte ne passe pas en dessous de la navbar
-  const cardH = SCREEN_HEIGHT - headerWhiteH - bottomNavHeight;
+  // Hauteur de la carte : pleine hauteur sous le header (carte jusqu'en bas = pas de trou au niveau de la nav)
+  const cardH = SCREEN_HEIGHT - headerWhiteH;
 
   // Snap points (offset Y relatif à la position initiale top: headerWhiteH)
   // La carte commence à top: headerWhiteH et a une hauteur cardH
@@ -557,21 +557,14 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
     };
   }, []);
 
-  // Style animé pour le contenu (ajuster la hauteur en fonction de la position)
-  // Optimisé pour réduire les recalculs
+  // Hauteur du contenu fixe (pas animée) pour éviter les re-layouts pendant le drag.
+  // paddingBottom = bottomNavHeight pour que le contenu scrollable ne soit pas masqué par la navbar.
   const grabberHeight = grabber ? 25 : 0;
-  const animatedContentStyle = useAnimatedStyle(() => {
-    'worklet';
-    // Calculer la hauteur visible de la carte
-    // translateY = 0 => carte à 100% visible (hauteur = cardH)
-    // translateY augmente => hauteur visible diminue
-    const visibleHeight = cardH - translateY.value;
-    const contentHeight = Math.max(0, visibleHeight - grabberHeight);
-    
-    return {
-      height: contentHeight, // Hauteur visible du contenu
-    };
-  }, [cardH, grabberHeight]);
+  const contentHeight = Math.max(0, cardH - grabberHeight);
+  const contentStyle = React.useMemo(
+    () => [styles.content, { height: contentHeight, paddingBottom: bottomNavHeight }],
+    [contentHeight, bottomNavHeight]
+  );
 
   // Ne pas rendre si le header n'est pas mesuré
   if (totalHeaderH === 0 && !propHeaderHeight) {
@@ -607,9 +600,9 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
           </View>
         </GestureDetector>
       )}
-      <Animated.View style={[styles.content, animatedContentStyle]}>
+      <View style={contentStyle}>
         {children}
-      </Animated.View>
+      </View>
     </Animated.View>
   );
 });

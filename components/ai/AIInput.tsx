@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity, Text, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 interface AttachedFile {
   id: string;
@@ -17,7 +17,15 @@ interface AIInputProps {
   attachedFiles?: AttachedFile[];
   onRemoveFile?: (fileId: string) => void;
   placeholder?: string;
+  colorScheme?: 'light' | 'dark';
 }
+
+const surfaceColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#2C2E30' : '#F5F5F5');
+const borderColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : '#E5E5E5');
+const mutedColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#9BA1A6' : '#666');
+const inputBgColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? Colors.dark.background : '#fff');
+// En dark mode fond gris lisible pour que la flèche blanche reste visible (sans bleu)
+const sendTint = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : darkColor);
 
 export default function AIInput({
   prompt,
@@ -27,18 +35,26 @@ export default function AIInput({
   attachedFiles = [],
   onRemoveFile,
   placeholder = "Posez votre question...",
+  colorScheme = 'light',
 }: AIInputProps) {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
+  const textColor = colorScheme === 'dark' ? Colors.dark.text : Colors.light.text;
+  const surface = surfaceColor(colorScheme);
+  const border = borderColor(colorScheme);
+  const muted = mutedColor(colorScheme);
+  const inputBg = inputBgColor(colorScheme);
+  const sendColor = sendTint(colorScheme);
+
   return (
-    <View style={styles.inputFormContainer}>
+    <View style={[styles.inputFormContainer, { borderColor: border, backgroundColor: inputBg }]}>
       {attachedFiles.length > 0 && (
         <View style={styles.attachedFilesContainer}>
           {attachedFiles.map((file) => (
-            <View key={file.id} style={styles.fileBadge}>
-              <Ionicons name="attach" size={12} color={darkColor} style={styles.fileBadgeIcon} />
-              <Text style={styles.fileBadgeText} numberOfLines={1}>
+            <View key={file.id} style={[styles.fileBadge, { backgroundColor: surface, borderColor: border }]}>
+              <Ionicons name="attach" size={12} color={textColor} style={styles.fileBadgeIcon} />
+              <Text style={[styles.fileBadgeText, { color: textColor }]} numberOfLines={1}>
                 {file.name}
               </Text>
               {onRemoveFile && (
@@ -47,7 +63,7 @@ export default function AIInput({
                   style={styles.fileBadgeClose}
                   hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
                 >
-                  <Ionicons name="close" size={12} color={darkColor} />
+                  <Ionicons name="close" size={12} color={textColor} />
                 </TouchableOpacity>
               )}
             </View>
@@ -56,9 +72,9 @@ export default function AIInput({
       )}
       
       <TextInput
-        style={styles.inputTextArea}
+        style={[styles.inputTextArea, { color: textColor }]}
         placeholder={placeholder}
-        placeholderTextColor="#999"
+        placeholderTextColor={muted}
         value={prompt}
         onChangeText={onPromptChange}
         multiline
@@ -66,30 +82,33 @@ export default function AIInput({
         textAlignVertical="top"
         editable={!isLoading}
         onSubmitEditing={onSubmit}
+        autoCorrect={false}
+        autoComplete="off"
+        spellCheck={false}
       />
 
       <View style={styles.inputActionsRow}>
         <View style={styles.inputActionsLeft}>
           <TouchableOpacity
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: surface }]}
             onPress={() => {
               setShowSettingsMenu(false);
               setShowActionsMenu(!showActionsMenu);
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name="add" size={16} color={darkColor} />
+            <Ionicons name="add" size={16} color={textColor} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: surface }]}
             onPress={() => {
               setShowActionsMenu(false);
               setShowSettingsMenu(!showSettingsMenu);
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name="options" size={16} color={darkColor} />
+            <Ionicons name="options" size={16} color={textColor} />
           </TouchableOpacity>
         </View>
 
@@ -97,6 +116,7 @@ export default function AIInput({
           <TouchableOpacity
             style={[
               styles.sendButtonNew,
+              { backgroundColor: sendColor },
               (!prompt.trim() || isLoading) && styles.sendButtonDisabled,
             ]}
             onPress={onSubmit}
@@ -114,66 +134,66 @@ export default function AIInput({
 
       {/* Menu Actions Dropdown */}
       {showActionsMenu && (
-        <View style={styles.dropdownMenu}>
+        <View style={[styles.dropdownMenu, { backgroundColor: inputBg, borderColor: border }]}>
           <TouchableOpacity
             style={styles.dropdownMenuItem}
             onPress={() => setShowActionsMenu(false)}
           >
-            <Ionicons name="attach" size={16} color="#666" />
-            <Text style={styles.dropdownMenuItemText}>Attach Files</Text>
+            <Ionicons name="attach" size={16} color={muted} />
+            <Text style={[styles.dropdownMenuItemText, { color: muted }]}>Attach Files</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.dropdownMenuItem}
             onPress={() => setShowActionsMenu(false)}
           >
-            <Ionicons name="link" size={16} color="#666" />
-            <Text style={styles.dropdownMenuItemText}>Import from URL</Text>
+            <Ionicons name="link" size={16} color={muted} />
+            <Text style={[styles.dropdownMenuItemText, { color: muted }]}>Import from URL</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.dropdownMenuItem}
             onPress={() => setShowActionsMenu(false)}
           >
-            <Ionicons name="clipboard-outline" size={16} color="#666" />
-            <Text style={styles.dropdownMenuItemText}>Paste from Clipboard</Text>
+            <Ionicons name="clipboard-outline" size={16} color={muted} />
+            <Text style={[styles.dropdownMenuItemText, { color: muted }]}>Paste from Clipboard</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Menu Settings Dropdown */}
       {showSettingsMenu && (
-        <View style={styles.dropdownMenu}>
+        <View style={[styles.dropdownMenu, { backgroundColor: inputBg, borderColor: border }]}>
           <View style={styles.dropdownMenuItem}>
-            <Ionicons name="sparkles" size={16} color="#666" />
-            <Text style={styles.dropdownMenuItemText}>Auto-complete</Text>
+            <Ionicons name="sparkles" size={16} color={muted} />
+            <Text style={[styles.dropdownMenuItemText, { color: muted }]}>Auto-complete</Text>
             <View style={styles.switchContainer}>
               <Switch
                 value={true}
                 onValueChange={() => {}}
-                trackColor={{ false: '#E5E5E5', true: darkColor }}
+                trackColor={{ false: border, true: sendColor }}
                 thumbColor="#fff"
               />
             </View>
           </View>
           <View style={styles.dropdownMenuItem}>
-            <Ionicons name="play-outline" size={16} color="#666" />
-            <Text style={styles.dropdownMenuItemText}>Streaming</Text>
+            <Ionicons name="play-outline" size={16} color={muted} />
+            <Text style={[styles.dropdownMenuItemText, { color: muted }]}>Streaming</Text>
             <View style={styles.switchContainer}>
               <Switch
                 value={false}
                 onValueChange={() => {}}
-                trackColor={{ false: '#E5E5E5', true: darkColor }}
+                trackColor={{ false: border, true: sendColor }}
                 thumbColor="#fff"
               />
             </View>
           </View>
           <View style={styles.dropdownMenuItem}>
-            <Ionicons name="time" size={16} color="#666" />
-            <Text style={styles.dropdownMenuItemText}>Show History</Text>
+            <Ionicons name="time" size={16} color={muted} />
+            <Text style={[styles.dropdownMenuItemText, { color: muted }]}>Show History</Text>
             <View style={styles.switchContainer}>
               <Switch
                 value={false}
                 onValueChange={() => {}}
-                trackColor={{ false: '#E5E5E5', true: darkColor }}
+                trackColor={{ false: border, true: sendColor }}
                 thumbColor="#fff"
               />
             </View>
@@ -189,9 +209,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
     padding: 8,
-    backgroundColor: '#fff',
     gap: 8,
     flexShrink: 0,
     position: 'relative',
@@ -205,12 +223,10 @@ const styles = StyleSheet.create({
   fileBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
     maxWidth: 120,
     gap: 4,
   },
@@ -219,7 +235,6 @@ const styles = StyleSheet.create({
   },
   fileBadgeText: {
     fontSize: 12,
-    color: darkColor,
     flex: 1,
   },
   fileBadgeClose: {
@@ -229,7 +244,6 @@ const styles = StyleSheet.create({
     minHeight: 48,
     maxHeight: 120,
     fontSize: 14,
-    color: darkColor,
     padding: 0,
     textAlignVertical: 'top',
   },
@@ -247,7 +261,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -259,7 +272,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: darkColor,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -271,15 +283,13 @@ const styles = StyleSheet.create({
     bottom: '100%',
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
     paddingVertical: 8,
     marginBottom: 8,
-    shadowColor: darkColor,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
   },
@@ -292,7 +302,6 @@ const styles = StyleSheet.create({
   },
   dropdownMenuItemText: {
     fontSize: 14,
-    color: '#666',
     flex: 1,
   },
   switchContainer: {

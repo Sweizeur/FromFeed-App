@@ -3,23 +3,25 @@ import {
   View,
   StyleSheet,
   ActivityIndicator,
-  LayoutChangeEvent,
   Text,
   Keyboard,
   TouchableWithoutFeedback,
   AppState,
+  useColorScheme,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import MapView, { Marker } from 'react-native-maps';
+import { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
-import SlidingCard, { SlidingCardRef } from '@/components/common/SlidingCard';
-import MapHeader, { UpgradePopup } from '@/components/navigation/MapHeader';
+
+const CLUSTER_RED = '#E53935';
+const CLUSTER_SIZE = 32;
+const CLUSTER_FONT_SIZE = 12;
+const DEFAULT_MARKER_EMOJI = '📍';
+const MARKER_EMOJI_SIZE = 28;
+const MARKER_EMOJI_BOX = 40;
+import ClusteredMapView from 'react-native-map-clustering';
 import LinkBottomSheet from '@/components/modals/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
-import PlaceTransition from '@/components/places/PlaceTransition';
-import AddToCollectionModal from '@/components/collections/AddToCollectionModal';
 import { createLinkPreviewTask, getTaskStatus, deletePlace, type Place, type PlaceSummary } from '@/lib/api';
 
 const PENDING_LINK_TASK_ID = '@fromfeed:pendingLinkTaskId';
@@ -31,14 +33,15 @@ import { useMap } from '@/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
 import { useShareHandler } from '@/hooks/useShareHandler';
 import { matchesTypeFilter } from '@/utils/typeHierarchy';
-import { darkColor } from '@/constants/theme';
-
-const HEADER_WHITE_HEIGHT = 120;
-const BOTTOM_NAV_HEIGHT = 52;
+import { darkColor, Colors } from '@/constants/theme';
+import GlassButton from '@/components/ui/GlassButton';
+import MapTabHeader from '@/components/navigation/MapTabHeader';
 
 export default function MapScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
 
   // Hooks personnalisés
   const {
@@ -52,14 +55,23 @@ export default function MapScreen() {
     setSelectedPlace,
   } = usePlaces();
 
-  const { region, loadingLocation, mapViewRef, animateToPlace } = useMap();
+  const {
+    region,
+    loadingLocation,
+    mapViewRef,
+    animateToPlace,
+    animateToUser,
+    startWatchingUser,
+    stopWatchingUser,
+    isProgrammaticChange,
+  } = useMap();
   const { toast, showSuccess, showError, hideToast } = useToast();
 
+  // Suivi utilisateur : carte recentrée à chaque déplacement ; désactivé quand l'utilisateur déplace la carte
+  const [followUser, setFollowUser] = useState(false);
+
   // État local pour l'UI
-  const [headerHeight, setHeaderHeight] = useState(0);
   const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
-  const [isAddToCollectionModalVisible, setIsAddToCollectionModalVisible] = useState(false);
-  const [selectedPlaceForCollection, setSelectedPlaceForCollection] = useState<string | null>(null);
   const [linkInput, setLinkInput] = useState('');
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [processingUrl, setProcessingUrl] = useState<string | null>(null);
@@ -77,11 +89,6 @@ export default function MapScreen() {
     setSelectedType(null);
   };
 
-  const slidingCardRef = useRef<SlidingCardRef>(null);
-  const placeDetailsScrollViewRef = useRef<any>(null);
-  const cardTranslateY = useSharedValue(0);
-  const lastCardTranslateYRef = useRef<number | null>(null);
-
   const handlePlacePress = React.useCallback(async (place: Place | PlaceSummary) => {
     if ('provider' in place && !('createdAt' in place)) {
       try {
@@ -95,9 +102,6 @@ export default function MapScreen() {
       setSelectedPlace(place as Place);
     }
     await animateToPlace(place);
-    if (slidingCardRef.current) {
-      slidingCardRef.current.animateToSnapPoint(50);
-    }
   }, [loadPlaceDetails, setSelectedPlace, animateToPlace]);
 
   const clearPendingTask = useCallback(() => {
@@ -285,10 +289,6 @@ export default function MapScreen() {
     }
   };
 
-  const handleHeaderContainerLayout = (event: LayoutChangeEvent) => {
-    setHeaderHeight(event.nativeEvent.layout.height);
-  };
-
   const filteredPlaces = React.useMemo(() => {
     if (!selectedCategory && !selectedType) return placesSummary;
     return placesSummary.filter((place) => {
@@ -298,105 +298,104 @@ export default function MapScreen() {
     });
   }, [placesSummary, selectedCategory, selectedType]);
 
-  const handleCardPositionChange = React.useCallback((translateY: number) => {
-    cardTranslateY.value = translateY;
-  }, []);
+  const handleCenterUser = useCallback(async () => {
+    if (followUser) {
+      setFollowUser(false);
+      stopWatchingUser();
+    } else {
+      setFollowUser(true);
+      await startWatchingUser();
+      await animateToUser();
+    }
+  }, [followUser, startWatchingUser, stopWatchingUser, animateToUser]);
 
-  const handleSnapPointReached = React.useCallback((translateY: number, _cardHeight: number) => {
-    lastCardTranslateYRef.current = translateY;
-  }, []);
-
-  const mapContainerAnimatedStyle = useAnimatedStyle(() => {
-    'worklet';
-    return { height: HEADER_WHITE_HEIGHT + cardTranslateY.value };
-  });
+  const handleRegionChangeComplete = useCallback(() => {
+    if (isProgrammaticChange()) return;
+    if (followUser) {
+      setFollowUser(false);
+      stopWatchingUser();
+    }
+  }, [followUser, isProgrammaticChange, stopWatchingUser]);
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.container}>
-        <MapHeader
-          onLayout={handleHeaderContainerLayout}
-          onAddLinkPress={() => setIsLinkModalVisible(true)}
-          onAIPress={() => router.push('/ai')}
-          places={placesSummary}
-          selectedCategory={selectedCategory}
-          selectedType={selectedType}
-          onCategoryChange={handleCategoryChange}
-          onTypeChange={setSelectedType}
-          onlyFilters={false}
+        <MapTabHeader
+          placesCount={filteredPlaces.length}
+          onAddPress={() => setIsLinkModalVisible(true)}
         />
-
-        {/* Carte + sliding card */}
-        {(
-          <>
-            <Animated.View style={[styles.mapContainer, mapContainerAnimatedStyle]}>
-              <UpgradePopup />
-              {loadingLocation && (
-                <View style={styles.mapLoading}>
-                  <ActivityIndicator size="large" color={darkColor} />
-                </View>
-              )}
-              {!loadingLocation && region && (
-                <MapView
-                  ref={mapViewRef}
-                  style={StyleSheet.absoluteFillObject}
-                  initialRegion={region}
-                  showsUserLocation
-                >
-                  {filteredPlaces
-                    .filter((p) => p?.id && p.lat != null && p.lon != null)
-                    .map((place) => (
-                      <Marker
-                        key={place.id}
-                        coordinate={{ latitude: place.lat!, longitude: place.lon! }}
-                        title={place.placeName || place.rawTitle || 'Lieu'}
-                        description={place.googleFormattedAddress || place.address || undefined}
-                        onPress={() => handlePlacePress(place)}
-                      />
-                    ))}
-                </MapView>
-              )}
-              {!loadingLocation && !region && (
-                <View style={styles.mapLoading}>
-                  <ActivityIndicator size="large" color={darkColor} />
-                </View>
-              )}
-            </Animated.View>
-            {headerHeight > 0 && (
-              <SlidingCard
-                ref={slidingCardRef}
-                headerHeight={headerHeight}
-                headerWhiteHeight={HEADER_WHITE_HEIGHT}
-                bottomNavHeight={BOTTOM_NAV_HEIGHT + insets.bottom}
-                initialSnap={lastCardTranslateYRef.current === null ? 'mid' : undefined}
-                restoreTranslateY={lastCardTranslateYRef.current}
-                enableFling
-                grabber
-                testID="sliding-card"
-                onPositionChange={handleCardPositionChange}
-                onSnapPointReached={handleSnapPointReached}
-              >
-                <PlaceTransition
-                  selectedPlace={selectedPlace}
-                  placesSummary={filteredPlaces}
-                  placesListKey={placesListKey}
-                  onPlacePress={handlePlacePress}
-                  onBack={clearSelectedPlace}
-                  scrollViewRef={placeDetailsScrollViewRef}
-                  onRefreshPlaces={refreshPlaces}
-                  refreshingPlaces={refreshing}
-                  onRatingUpdated={() => refreshPlaces(false)}
-                  onDeletePlaces={handleDeletePlaces}
-                  onAddToCollection={(placeId) => {
-                    setSelectedPlaceForCollection(placeId);
-                    setIsAddToCollectionModalVisible(true);
-                  }}
-                  isAddingPlace={isAddingPlace}
-                />
-              </SlidingCard>
+        <View style={styles.mapContainer}>
+            {loadingLocation && (
+              <View style={styles.mapLoading}>
+                <ActivityIndicator size="large" color={darkColor} />
+              </View>
             )}
-          </>
-        )}
+            {!loadingLocation && region && (
+              <ClusteredMapView
+                ref={mapViewRef}
+                style={StyleSheet.absoluteFillObject}
+                initialRegion={region}
+                showsUserLocation
+                onRegionChangeComplete={handleRegionChangeComplete}
+                clusterColor={CLUSTER_RED}
+                clusterTextColor="#FFFFFF"
+                renderCluster={({ id, geometry, properties, onPress }) => (
+                  <Marker
+                    key={`cluster-${id}-${properties.point_count}`}
+                    coordinate={{
+                      latitude: geometry.coordinates[1],
+                      longitude: geometry.coordinates[0],
+                    }}
+                    onPress={onPress}
+                  >
+                    <View style={clusterStyles.bubble}>
+                      <Text style={clusterStyles.count} numberOfLines={1}>
+                        {properties.point_count}
+                      </Text>
+                    </View>
+                  </Marker>
+                )}
+              >
+                {filteredPlaces
+                  .filter((p) => p?.id && p.lat != null && p.lon != null)
+                  .map((place) => (
+                    <Marker
+                      key={place.id}
+                      coordinate={{ latitude: place.lat!, longitude: place.lon! }}
+                      title={place.placeName || place.rawTitle || 'Lieu'}
+                      description={place.googleFormattedAddress || place.address || undefined}
+                      onPress={() => handlePlacePress(place)}
+                      tracksViewChanges={false}
+                    >
+                      <View style={markerStyles.emojiBox}>
+                        <Text style={markerStyles.emoji}>
+                          {place.markerEmoji ?? DEFAULT_MARKER_EMOJI}
+                        </Text>
+                      </View>
+                    </Marker>
+                  ))}
+              </ClusteredMapView>
+            )}
+            {!loadingLocation && !region && (
+              <View style={styles.mapLoading}>
+                <ActivityIndicator size="large" color={darkColor} />
+              </View>
+            )}
+            {!loadingLocation && region && (
+              <View style={[styles.centerUserButton, { bottom: insets.bottom + 72 }]} pointerEvents="box-none">
+                <GlassButton
+                  icon="locate"
+                  onPress={handleCenterUser}
+                  active={followUser}
+                  activeTint="#0a7ea4"
+                  activeTextColor="#fff"
+                  accessibilityLabel={followUser ? 'Ne plus suivre ma position' : 'Centrer et suivre ma position'}
+                  textColor={theme.text}
+                  backgroundColor={theme.background}
+                />
+              </View>
+            )}
+          </View>
 
         <LinkBottomSheet
           visible={isLinkModalVisible}
@@ -423,18 +422,6 @@ export default function MapScreen() {
           }}
         />
 
-        {selectedPlaceForCollection && (
-          <AddToCollectionModal
-            visible={isAddToCollectionModalVisible}
-            onClose={() => {
-              setIsAddToCollectionModalVisible(false);
-              setSelectedPlaceForCollection(null);
-            }}
-            placeId={selectedPlaceForCollection}
-            onSuccess={() => refreshPlaces(false)}
-          />
-        )}
-
         <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
       </View>
     </TouchableWithoutFeedback>
@@ -443,6 +430,50 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  mapContainer: { position: 'relative', width: '100%' },
+  mapContainer: { flex: 1, position: 'relative', width: '100%' },
   mapLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  centerUserButton: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 10,
+  },
+});
+
+const clusterStyles = StyleSheet.create({
+  bubble: {
+    width: CLUSTER_SIZE,
+    height: CLUSTER_SIZE,
+    borderRadius: CLUSTER_SIZE / 2,
+    backgroundColor: CLUSTER_RED,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  count: {
+    color: '#FFFFFF',
+    fontSize: CLUSTER_FONT_SIZE,
+    fontWeight: '600',
+  },
+});
+
+const markerStyles = StyleSheet.create({
+  emojiBox: {
+    width: MARKER_EMOJI_BOX,
+    height: MARKER_EMOJI_BOX,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: MARKER_EMOJI_BOX / 2,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  emoji: {
+    fontSize: MARKER_EMOJI_SIZE,
+    lineHeight: MARKER_EMOJI_BOX,
+    textAlign: 'center',
+  },
 });

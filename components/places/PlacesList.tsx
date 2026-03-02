@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, StyleSheet, FlatList, Text, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, Text, RefreshControl, TouchableOpacity, Alert, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PlaceSummary } from '@/types/api';
 import PlaceCard from './PlaceCard';
 import PlaceCardSkeleton from './PlaceCardSkeleton';
-import { darkColor } from '@/constants/theme';
+import GlassButton from '@/components/ui/GlassButton';
+import { Colors, darkColor } from '@/constants/theme';
 
 interface PlacesListProps {
   onPlacePress?: (place: PlaceSummary) => void;
@@ -17,10 +18,28 @@ interface PlacesListProps {
 }
 
 export default function PlacesList({ onPlacePress, placesSummary, onRefresh, refreshing = false, onDeletePlaces, onAddToCollection, isAddingPlace = false }: PlacesListProps) {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
+
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   // Utiliser un tableau au lieu d'un Set pour une meilleure stabilité
   const [selectedPlaceIds, setSelectedPlaceIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const themedStyles = useMemo(
+    () =>
+      isDark
+        ? {
+            headerText: { color: theme.text },
+            clearSelectionText: { color: theme.icon },
+            emptyText: { color: theme.text },
+            emptySubtext: { color: theme.icon },
+            deleteButtonHeader: { backgroundColor: '#3C2A2A', borderColor: '#4A3535' },
+          }
+        : {},
+    [isDark, theme]
+  );
 
   // Convertir en Set pour les vérifications rapides
   const selectedPlaceIdsSet = useMemo(() => new Set(selectedPlaceIds), [selectedPlaceIds]);
@@ -36,12 +55,22 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
     return inCollections;
   }, [placesSummary]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     if (onRefresh) {
-      // Passer skipCache=true pour le pull-to-refresh manuel
       await onRefresh(true);
     }
-  };
+  }, [onRefresh]);
+
+  const refreshControl = useMemo(
+    () => (
+      <RefreshControl
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        tintColor={theme.text}
+      />
+    ),
+    [refreshing, handleRefresh, theme.text]
+  );
 
   const toggleSelectionMode = useCallback(() => {
     setIsSelectionMode((prev) => {
@@ -163,93 +192,76 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
   if (placesSummary.length === 0 && !isAddingPlace) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.emptyText}>Aucun lieu sauvegardé</Text>
-        <Text style={styles.emptySubtext}>
+        <Text style={[styles.emptyText, themedStyles.emptyText]}>Aucun lieu sauvegardé</Text>
+        <Text style={[styles.emptySubtext, themedStyles.emptySubtext]}>
           Ajoutez un lien TikTok ou Instagram pour commencer
         </Text>
       </View>
     );
   }
 
-  return (
-    <FlatList
-      data={dataWithSkeleton}
-      keyExtractor={(item) => item.__isSkeleton ? '__skeleton__' : keyExtractor(item)}
-      renderItem={renderItemWithSkeleton}
-      removeClippedSubviews={true}
-      maxToRenderPerBatch={10}
-      updateCellsBatchingPeriod={50}
-      initialNumToRender={10}
-      windowSize={10}
-      ListHeaderComponent={
-        placesSummary.length > 0 ? (
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Text style={styles.headerText}>
-                {isSelectionMode && selectedPlaceIds.length > 0
-                  ? `${selectedPlaceIds.length} sélectionné${selectedPlaceIds.length > 1 ? 's' : ''}`
-                  : `${placesSummary.length} ${placesSummary.length === 1 ? 'lieu sauvegardé' : 'lieux sauvegardés'}`}
-              </Text>
-              {isSelectionMode && selectedPlaceIds.length > 0 && (
-                <TouchableOpacity
-                  onPress={clearSelection}
-                  style={styles.clearSelectionButton}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.clearSelectionText}>Tout désélectionner</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <View style={styles.headerRight}>
-              {isSelectionMode && selectedPlaceIds.length > 0 && (
-                <TouchableOpacity
-                  onPress={handleDeleteSelected}
-                  style={[styles.deleteButtonHeader, isDeleting && styles.deleteButtonDisabled]}
-                  disabled={isDeleting}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#FF3B30" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity 
-                onPress={toggleSelectionMode}
-                style={[styles.selectionButton, isSelectionMode && styles.selectionButtonActive]}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.selectionButtonText, isSelectionMode && styles.selectionButtonTextActive]}>
-                  {isSelectionMode ? 'Terminer' : 'Sélectionner'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : null
-      }
-      ListFooterComponent={
-        isSelectionMode && selectedPlaceIds.length > 0 ? (
-          <View style={styles.footer}>
+  const stickyHeader = (
+    <View style={styles.stickyHeaderContainer}>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.headerText, themedStyles.headerText]}>
+            {isSelectionMode && selectedPlaceIds.length > 0
+              ? `${selectedPlaceIds.length} sélectionné${selectedPlaceIds.length > 1 ? 's' : ''}`
+              : `${placesSummary.length} ${placesSummary.length === 1 ? 'lieu sauvegardé' : 'lieux sauvegardés'}`}
+          </Text>
+          {isSelectionMode && selectedPlaceIds.length > 0 && (
+            <TouchableOpacity
+              onPress={clearSelection}
+              style={styles.clearSelectionButton}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.clearSelectionText, themedStyles.clearSelectionText]}>Tout désélectionner</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={styles.headerRight}>
+          {isSelectionMode && selectedPlaceIds.length > 0 && (
             <TouchableOpacity
               onPress={handleDeleteSelected}
-              style={[styles.deleteButtonFooter, isDeleting && styles.deleteButtonDisabled]}
+              style={[styles.deleteButtonHeader, themedStyles.deleteButtonHeader, isDeleting && styles.deleteButtonDisabled]}
               disabled={isDeleting}
               activeOpacity={0.7}
             >
-              <Ionicons name="trash-outline" size={14} color="#FF3B30" />
-              <Text style={styles.deleteButtonTextFooter}>
-                {isDeleting ? 'Suppression...' : `Supprimer ${selectedPlaceIds.length}`}
-              </Text>
+              <Ionicons name="trash-outline" size={16} color="#FF3B30" />
             </TouchableOpacity>
-          </View>
-        ) : null
-      }
-      contentContainerStyle={styles.listContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor="#1A1A1A"
-        />
-      }
-    />
+          )}
+          <GlassButton
+            label={isSelectionMode ? 'Terminer' : 'Sélectionner'}
+            onPress={toggleSelectionMode}
+            active={isSelectionMode}
+            textColor={theme.text}
+            activeTextColor={theme.background}
+            activeTint={theme.tint}
+            backgroundColor={isDark ? '#252628' : undefined}
+            borderColor={isDark ? '#3C3E40' : undefined}
+            compact
+          />
+        </View>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.listWrapper}>
+      {stickyHeader}
+      <FlatList
+        data={dataWithSkeleton}
+        keyExtractor={(item) => item.__isSkeleton ? '__skeleton__' : keyExtractor(item)}
+        renderItem={renderItemWithSkeleton}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
+        windowSize={10}
+        contentContainerStyle={styles.listContent}
+        refreshControl={refreshControl}
+      />
+    </View>
   );
 }
 
@@ -272,12 +284,19 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
+  listWrapper: {
+    flex: 1,
+  },
+  stickyHeaderContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
   listContent: {
-    padding: 16,
+    paddingHorizontal: 16,
     paddingBottom: 32,
   },
   header: {
-    marginBottom: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -316,51 +335,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  selectionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F5F5F5',
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-  },
-  selectionButtonActive: {
-    backgroundColor: darkColor,
-    borderColor: darkColor,
-  },
-  selectionButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: darkColor,
-    letterSpacing: -0.2,
-  },
-  selectionButtonTextActive: {
-    color: '#fff',
-  },
-  footer: {
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  deleteButtonFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF5F5',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#FFE5E5',
-  },
   deleteButtonDisabled: {
     opacity: 0.6,
-  },
-  deleteButtonTextFooter: {
-    color: '#FF3B30',
-    fontSize: 14,
-    fontWeight: '500',
-    letterSpacing: -0.2,
   },
   skeletonContainer: {
     // Pas de padding supplémentaire, le skeleton a déjà le bon style

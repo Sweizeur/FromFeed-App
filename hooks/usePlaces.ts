@@ -99,13 +99,14 @@ export function usePlaces() {
       
       console.log('[usePlaces] Chargement de toutes les places...', skipCache ? '(skip cache)' : '(avec cache)');
       const response = await getAllPlacesSummary(skipCache);
-      console.log('[usePlaces] Places chargées:', response.places.length);
+      const places = response?.places ?? [];
+      console.log('[usePlaces] Places chargées:', places.length);
 
-      const validPlaces = filterValidPlaces(response.places);
-      
+      const validPlaces = filterValidPlaces(places);
+
       // Mettre à jour le cache client
       clientCache = {
-        data: response.places,
+        data: places,
         timestamp: Date.now(),
       };
       
@@ -158,7 +159,8 @@ export function usePlaces() {
     } finally {
       isRefreshingRef.current = false;
       if (!silent) {
-        setRefreshing(false);
+        // Petit délai pour laisser le RefreshControl natif terminer son animation (évite le warning UIKit)
+        setTimeout(() => setRefreshing(false), 100);
       }
     }
   }, [filterValidPlaces]);

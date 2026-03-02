@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useMemo } from 'react';
+import { View, StyleSheet, ScrollView, useColorScheme } from 'react-native';
 import { PlaceSummary } from '@/types/api';
-import { darkColor } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
+import GlassButton from '@/components/ui/GlassButton';
 
 interface PlaceFiltersProps {
   places: PlaceSummary[];
@@ -10,6 +10,8 @@ interface PlaceFiltersProps {
   selectedType: string | null;
   onCategoryChange: (category: string | null) => void;
   onTypeChange: (type: string | null) => void;
+  /** Apparence pour le dark mode (défaut: apparence système) */
+  colorScheme?: 'light' | 'dark' | null;
 }
 
 export default function PlaceFilters({
@@ -18,7 +20,34 @@ export default function PlaceFilters({
   selectedType,
   onCategoryChange,
   onTypeChange,
+  colorScheme: colorSchemeProp,
 }: PlaceFiltersProps) {
+  const systemScheme = useColorScheme();
+  const isDark = (colorSchemeProp ?? systemScheme) === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
+
+  const themedStyles = useMemo(
+    () =>
+      isDark
+        ? {
+            container: { backgroundColor: theme.background, borderBottomColor: '#2C2E30' },
+            glassBg: '#252628' as string | undefined,
+            glassBorder: '#3C3E40' as string | undefined,
+            textColor: theme.icon,
+            activeTint: theme.tint,
+            activeTextColor: theme.background,
+          }
+        : {
+            container: {},
+            glassBg: undefined as string | undefined,
+            glassBorder: undefined as string | undefined,
+            textColor: '#666',
+            activeTint: '#1A1A1A',
+            activeTextColor: '#fff',
+          },
+    [isDark, theme]
+  );
+
   // Extraire les types uniques selon la catégorie sélectionnée
   const allTypes = React.useMemo(() => {
     const typesSet = new Set<string>();
@@ -42,7 +71,7 @@ export default function PlaceFilters({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, themedStyles.container]}>
       {!showTypeRow ? (
         /* Vue catégories : Tous, Restauration, Activité */
         <ScrollView
@@ -50,54 +79,36 @@ export default function PlaceFilters({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryContainer}
         >
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedCategory === null && styles.filterButtonActive,
-            ]}
+          <GlassButton
+            label="Tous"
             onPress={() => onCategoryChange(null)}
-          >
-            <Text
-              style={[
-                styles.filterButtonText,
-                selectedCategory === null && styles.filterButtonTextActive,
-              ]}
-            >
-              Tous
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedCategory === 'Restauration' && styles.filterButtonActive,
-            ]}
+            active={selectedCategory === null}
+            textColor={themedStyles.textColor}
+            activeTextColor={themedStyles.activeTextColor}
+            activeTint={themedStyles.activeTint}
+            backgroundColor={themedStyles.glassBg}
+            borderColor={themedStyles.glassBorder}
+          />
+          <GlassButton
+            label="Restauration"
             onPress={() => onCategoryChange('Restauration')}
-          >
-            <Text
-              style={[
-                styles.filterButtonText,
-                selectedCategory === 'Restauration' && styles.filterButtonTextActive,
-              ]}
-            >
-              Restauration
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedCategory === 'Activité' && styles.filterButtonActive,
-            ]}
+            active={selectedCategory === 'Restauration'}
+            textColor={themedStyles.textColor}
+            activeTextColor={themedStyles.activeTextColor}
+            activeTint={themedStyles.activeTint}
+            backgroundColor={themedStyles.glassBg}
+            borderColor={themedStyles.glassBorder}
+          />
+          <GlassButton
+            label="Activité"
             onPress={() => onCategoryChange('Activité')}
-          >
-            <Text
-              style={[
-                styles.filterButtonText,
-                selectedCategory === 'Activité' && styles.filterButtonTextActive,
-              ]}
-            >
-              Activité
-            </Text>
-          </TouchableOpacity>
+            active={selectedCategory === 'Activité'}
+            textColor={themedStyles.textColor}
+            activeTextColor={themedStyles.activeTextColor}
+            activeTint={themedStyles.activeTint}
+            backgroundColor={themedStyles.glassBg}
+            borderColor={themedStyles.glassBorder}
+          />
         </ScrollView>
       ) : (
         /* Vue sous-filtres : retour catégorie + types (les filtres catégorie disparaissent) */
@@ -106,47 +117,41 @@ export default function PlaceFilters({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.typeContainer}
         >
-          <TouchableOpacity
-            style={styles.backButton}
+          <GlassButton
+            label={selectedCategory ?? ''}
             onPress={goBackToCategories}
-          >
-            <Ionicons name="chevron-back" size={18} color={darkColor} />
-            <Text style={styles.backButtonText}>{selectedCategory}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.typeButton,
-              selectedType === null && styles.typeButtonActive,
-            ]}
+            icon="chevron-back"
+            iconSize={18}
+            compact
+            textColor={theme.text}
+            backgroundColor={themedStyles.glassBg}
+            borderColor={themedStyles.glassBorder}
+            style={styles.backButtonSpacing}
+          />
+          <GlassButton
+            label="Tous"
             onPress={() => onTypeChange(null)}
-          >
-            <Text
-              style={[
-                styles.typeButtonText,
-                selectedType === null && styles.typeButtonTextActive,
-              ]}
-            >
-              Tous
-            </Text>
-          </TouchableOpacity>
+            active={selectedType === null}
+            compact
+            textColor={themedStyles.textColor}
+            activeTextColor={themedStyles.activeTextColor}
+            activeTint={themedStyles.activeTint}
+            backgroundColor={themedStyles.glassBg}
+            borderColor={themedStyles.glassBorder}
+          />
           {allTypes.map((type) => (
-            <TouchableOpacity
+            <GlassButton
               key={type}
-              style={[
-                styles.typeButton,
-                selectedType === type && styles.typeButtonActive,
-              ]}
+              label={type.charAt(0).toUpperCase() + type.slice(1)}
               onPress={() => onTypeChange(type)}
-            >
-              <Text
-                style={[
-                  styles.typeButtonText,
-                  selectedType === type && styles.typeButtonTextActive,
-                ]}
-              >
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </Text>
-            </TouchableOpacity>
+              active={selectedType === type}
+              compact
+              textColor={themedStyles.textColor}
+              activeTextColor={themedStyles.activeTextColor}
+              activeTint={themedStyles.activeTint}
+              backgroundColor={themedStyles.glassBg}
+              borderColor={themedStyles.glassBorder}
+            />
           ))}
         </ScrollView>
       )}
@@ -156,8 +161,6 @@ export default function PlaceFilters({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 4,
     backgroundColor: '#fff',
@@ -169,67 +172,13 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     alignItems: 'center',
   },
-  filterButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3F3F3',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  filterButtonActive: {
-    backgroundColor: '#1A1A1A',
-    borderColor: '#1A1A1A',
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  filterButtonTextActive: {
-    color: '#fff',
-  },
   typeContainer: {
     gap: 8,
     paddingRight: 16,
     alignItems: 'center',
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F0F0F0',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+  backButtonSpacing: {
     marginRight: 4,
-  },
-  backButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: darkColor,
-    marginLeft: 2,
-  },
-  typeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#F8F8F8',
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-  },
-  typeButtonActive: {
-    backgroundColor: '#1A1A1A',
-    borderColor: '#1A1A1A',
-  },
-  typeButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#666',
-  },
-  typeButtonTextActive: {
-    color: '#fff',
   },
 });
 

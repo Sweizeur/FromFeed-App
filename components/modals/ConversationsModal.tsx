@@ -16,7 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getConversations, deleteConversation } from '@/lib/api';
-import { darkColor, darkColorWithAlpha } from '@/constants/theme';
+import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 
 interface Conversation {
   id: string;
@@ -30,12 +30,19 @@ interface ConversationsModalProps {
   visible: boolean;
   onClose: () => void;
   onSelectConversation: (conversationId: string) => void;
-  currentConversationId?: string; // ID de la conversation actuellement affichée
-  onCurrentConversationDeleted?: () => void; // Callback quand la conversation actuelle est supprimée
-  onRefresh?: () => void; // Callback pour rafraîchir la liste
+  currentConversationId?: string;
+  onCurrentConversationDeleted?: () => void;
+  onRefresh?: () => void;
+  colorScheme?: 'light' | 'dark';
 }
 
 const CONVERSATIONS_CACHE_KEY = '@fromfeed:conversations_cache';
+
+const modalBg = (scheme: 'light' | 'dark') => (scheme === 'dark' ? Colors.dark.background : '#fff');
+const surfaceColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#2C2E30' : '#FAFAFA');
+const borderColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : '#EFEFEF');
+const mutedColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#9BA1A6' : '#666');
+const emptyIconColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#5a5d62' : '#CCC');
 
 export default function ConversationsModal({
   visible,
@@ -44,8 +51,15 @@ export default function ConversationsModal({
   onRefresh,
   currentConversationId,
   onCurrentConversationDeleted,
+  colorScheme = 'light',
 }: ConversationsModalProps) {
   const insets = useSafeAreaInsets();
+  const modalBgColor = modalBg(colorScheme);
+  const surface = surfaceColor(colorScheme);
+  const border = borderColor(colorScheme);
+  const muted = mutedColor(colorScheme);
+  const textColor = colorScheme === 'dark' ? Colors.dark.text : darkColor;
+  const emptyIcon = emptyIconColor(colorScheme);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(300);
@@ -220,27 +234,27 @@ export default function ConversationsModal({
         <Animated.View
           style={[
             styles.modal,
-            { paddingBottom: insets.bottom + 20 },
+            { paddingBottom: insets.bottom + 20, backgroundColor: modalBgColor },
             modalStyle,
           ]}
         >
           {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Mes conversations</Text>
+          <View style={[styles.header, { borderBottomColor: border }]}>
+            <Text style={[styles.headerTitle, { color: textColor }]}>Mes conversations</Text>
             <TouchableOpacity
               onPress={onClose}
-              style={styles.closeButton}
+              style={[styles.closeButton, { backgroundColor: surface }]}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={24} color={darkColor} />
+              <Ionicons name="close" size={24} color={textColor} />
             </TouchableOpacity>
           </View>
 
           {/* Content */}
           {conversations.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={48} color="#CCC" />
-              <Text style={styles.emptyText}>Aucune conversation</Text>
+              <Ionicons name="chatbubbles-outline" size={48} color={emptyIcon} />
+              <Text style={[styles.emptyText, { color: muted }]}>Aucune conversation</Text>
             </View>
           ) : (
             <FlatList
@@ -248,13 +262,13 @@ export default function ConversationsModal({
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={styles.conversationItem}
+                  style={[styles.conversationItem, { backgroundColor: surface, borderColor: border }]}
                   onPress={() => handleSelect(item.id)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.conversationContent}>
                     <View style={styles.conversationHeader}>
-                      <Text style={styles.conversationTitle} numberOfLines={1}>
+                      <Text style={[styles.conversationTitle, { color: textColor }]} numberOfLines={1}>
                         {getConversationTitle(item)}
                       </Text>
                       <TouchableOpacity
@@ -262,14 +276,14 @@ export default function ConversationsModal({
                         style={styles.deleteButton}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
-                        <Ionicons name="trash-outline" size={18} color="#999" />
+                        <Ionicons name="trash-outline" size={18} color={muted} />
                       </TouchableOpacity>
                     </View>
                     <View style={styles.conversationFooter}>
-                      <Text style={styles.conversationMeta}>
+                      <Text style={[styles.conversationMeta, { color: muted }]}>
                         {item._count.messages} message{item._count.messages > 1 ? 's' : ''}
                       </Text>
-                      <Text style={styles.conversationDate}>
+                      <Text style={[styles.conversationDate, { color: muted }]}>
                         {formatDate(item.updatedAt)}
                       </Text>
                     </View>
@@ -295,11 +309,10 @@ const styles = StyleSheet.create({
     backgroundColor: darkColorWithAlpha(0.4),
   },
   modal: {
-    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     height: '75%',
-    shadowColor: darkColor,
+    shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: -4 },
     shadowRadius: 20,
@@ -313,19 +326,16 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: darkColor,
     letterSpacing: -0.5,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -337,7 +347,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
     marginTop: 16,
   },
   listContent: {
@@ -345,12 +354,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   conversationItem: {
-    backgroundColor: '#FAFAFA',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
   },
   conversationContent: {
     flex: 1,
@@ -364,7 +371,6 @@ const styles = StyleSheet.create({
   conversationTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: darkColor,
     flex: 1,
     marginRight: 12,
   },
@@ -378,11 +384,9 @@ const styles = StyleSheet.create({
   },
   conversationMeta: {
     fontSize: 13,
-    color: '#666',
   },
   conversationDate: {
     fontSize: 13,
-    color: '#999',
   },
 });
 
