@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useColorScheme } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,11 +8,15 @@ import Animated, {
   withTiming,
   interpolate,
 } from 'react-native-reanimated';
+import { Colors, darkColor } from '@/constants/theme';
 
 /**
  * Composant Skeleton pour afficher un placeholder pendant le chargement d'un lieu
  */
 export default function PlaceCardSkeleton() {
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const shimmer = useSharedValue(0);
 
   useEffect(() => {
@@ -34,26 +38,26 @@ export default function PlaceCardSkeleton() {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.surface, shadowColor: isDark ? '#000' : darkColor }]}>
       {/* Image skeleton */}
-      <Animated.View style={[styles.imageSkeleton, shimmerStyle]} />
+      <Animated.View style={[styles.imageSkeleton, { backgroundColor: theme.border }, shimmerStyle]} />
 
       {/* Contenu skeleton */}
       <View style={styles.content}>
         <View style={styles.header}>
           {/* Nom skeleton */}
-          <Animated.View style={[styles.nameSkeleton, shimmerStyle]} />
+          <Animated.View style={[styles.nameSkeleton, { backgroundColor: theme.border }, shimmerStyle]} />
           {/* Rating skeleton */}
-          <Animated.View style={[styles.ratingSkeleton, shimmerStyle]} />
+          <Animated.View style={[styles.ratingSkeleton, { backgroundColor: theme.border }, shimmerStyle]} />
         </View>
 
         {/* Adresse skeleton */}
-        <Animated.View style={[styles.addressSkeleton, shimmerStyle]} />
+        <Animated.View style={[styles.addressSkeleton, { backgroundColor: theme.border }, shimmerStyle]} />
 
         {/* Providers skeleton */}
         <View style={styles.providersContainer}>
-          <Animated.View style={[styles.providerSkeleton, shimmerStyle]} />
-          <Animated.View style={[styles.providerSkeleton, shimmerStyle]} />
+          <Animated.View style={[styles.providerSkeleton, { backgroundColor: theme.border }, shimmerStyle]} />
+          <Animated.View style={[styles.providerSkeleton, { backgroundColor: theme.border }, shimmerStyle]} />
         </View>
       </View>
     </View>
@@ -63,13 +67,12 @@ export default function PlaceCardSkeleton() {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
     borderRadius: 12,
     marginBottom: 12,
     padding: 12,
     overflow: 'hidden',
     minHeight: 120,
-    shadowColor: '#1A1A1A',
+    shadowColor: darkColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -79,7 +82,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 8,
-    backgroundColor: '#E5E5E5',
   },
   content: {
     flex: 1,
@@ -95,19 +97,16 @@ const styles = StyleSheet.create({
   nameSkeleton: {
     width: '60%',
     height: 18,
-    backgroundColor: '#E5E5E5',
     borderRadius: 4,
   },
   ratingSkeleton: {
     width: 40,
     height: 16,
-    backgroundColor: '#E5E5E5',
     borderRadius: 4,
   },
   addressSkeleton: {
     width: '80%',
     height: 14,
-    backgroundColor: '#E5E5E5',
     borderRadius: 4,
     marginBottom: 8,
   },
@@ -118,7 +117,6 @@ const styles = StyleSheet.create({
   providerSkeleton: {
     width: 50,
     height: 20,
-    backgroundColor: '#E5E5E5',
     borderRadius: 10,
   },
 });

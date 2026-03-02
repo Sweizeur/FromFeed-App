@@ -30,7 +30,7 @@ export default function PlaceFilters({
     () =>
       isDark
         ? {
-            container: { backgroundColor: theme.background, borderBottomColor: '#2C2E30' },
+            container: { backgroundColor: theme.background, borderBottomColor: theme.border },
             glassBg: '#252628' as string | undefined,
             glassBorder: '#3C3E40' as string | undefined,
             textColor: theme.icon,
@@ -38,12 +38,12 @@ export default function PlaceFilters({
             activeTextColor: theme.background,
           }
         : {
-            container: {},
+            container: { backgroundColor: theme.background, borderBottomColor: theme.border },
             glassBg: undefined as string | undefined,
             glassBorder: undefined as string | undefined,
-            textColor: '#666',
-            activeTint: '#1A1A1A',
-            activeTextColor: '#fff',
+            textColor: theme.icon,
+            activeTint: theme.text,
+            activeTextColor: theme.surface,
           },
     [isDark, theme]
   );
@@ -163,9 +163,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingVertical: 4,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   categoryContainer: {
     gap: 8,

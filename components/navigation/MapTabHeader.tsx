@@ -3,25 +3,21 @@ import { View, StyleSheet, Text, Pressable, useColorScheme } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors } from '@/constants/theme';
-import GlassButton from '@/components/ui/GlassButton';
 
 interface MapTabHeaderProps {
   placesCount: number;
   onHelpPress?: () => void;
   onAddPress?: () => void;
   onProfilePress?: () => void;
+  onPlacesPress?: () => void;
 }
 
-function displayUsername(name: string | undefined, email: string): string {
-  if (name?.trim()) {
-    const first = name.trim().split(/\s+/)[0];
-    if (first) return `@${first}`;
-  }
-  const at = email?.indexOf('@');
-  if (at != null && at > 0) return `@${email.slice(0, at)}`;
-  return '@user';
+function formatUsername(username: string | undefined): string {
+  if (username) return username;
+  return 'User#0000';
 }
 
 export default function MapTabHeader({
@@ -29,6 +25,7 @@ export default function MapTabHeader({
   onHelpPress,
   onAddPress,
   onProfilePress,
+  onPlacesPress,
 }: MapTabHeaderProps) {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
@@ -36,17 +33,24 @@ export default function MapTabHeader({
   const theme = Colors[isDark ? 'dark' : 'light'];
   const { user } = useAuth();
 
-  const username = user ? displayUsername(user.name, user.email) : '@user';
+  const username = user ? formatUsername(user.username) : 'User#0000';
   const initial =
     user?.name?.trim().charAt(0)?.toUpperCase() ||
     user?.email?.charAt(0)?.toUpperCase() ||
     '?';
 
-  const pillBg = isDark ? 'rgba(58,59,61,0.6)' : 'rgba(232,232,232,0.6)';
+  const pillBg = isDark ? 'rgba(58,59,61,0.6)' : 'rgba(250,248,242,0.92)';
+  const pillBorder = isDark ? 'rgba(255,255,255,0.10)' : theme.border;
 
   return (
     <View
-      style={[styles.outer, { paddingTop: insets.top + 8 }]}
+      style={[
+        styles.outer,
+        {
+          paddingTop: insets.top + 8,
+          shadowOpacity: isDark ? 0.2 : 0.12,
+        },
+      ]}
       pointerEvents="box-none"
     >
       <BlurView
@@ -57,7 +61,8 @@ export default function MapTabHeader({
           {
             backgroundColor: isDark
               ? 'rgba(28,28,30,0.85)'
-              : 'rgba(255,255,255,0.88)',
+              : 'rgba(250,248,242,0.88)',
+            borderColor: pillBorder,
           },
         ]}
       >
@@ -88,28 +93,46 @@ export default function MapTabHeader({
               >
                 {username}
               </Text>
-              <Text style={[styles.placesCount, { color: theme.icon }]}>
-                {placesCount} lieu{placesCount !== 1 ? 'x' : ''}
-              </Text>
+              <Pressable onPress={onPlacesPress} hitSlop={4}>
+                <Text style={[styles.placesCount, { color: theme.icon }]}>
+                  {placesCount} lieu{placesCount !== 1 ? 'x' : ''}
+                </Text>
+              </Pressable>
             </View>
           </Pressable>
 
           {/* Actions */}
           <View style={styles.actions}>
-            <GlassButton
-              icon="help-circle-outline"
+            <Pressable
               onPress={onHelpPress ?? (() => {})}
+              accessibilityRole="button"
               accessibilityLabel="Aide"
-              textColor={theme.text}
-              backgroundColor={isDark ? '#3a3b3d' : '#e8e8e8'}
-            />
-            <GlassButton
-              icon="add"
+              style={({ pressed }) => [
+                styles.actionButton,
+                {
+                  backgroundColor: pillBg,
+                  borderColor: pillBorder,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Ionicons name="help-circle-outline" size={20} color={theme.text} />
+            </Pressable>
+            <Pressable
               onPress={onAddPress ?? (() => {})}
+              accessibilityRole="button"
               accessibilityLabel="Ajouter un lieu"
-              textColor={theme.text}
-              backgroundColor={isDark ? '#3a3b3d' : '#e8e8e8'}
-            />
+              style={({ pressed }) => [
+                styles.actionButton,
+                {
+                  backgroundColor: pillBg,
+                  borderColor: pillBorder,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Ionicons name="add" size={20} color={theme.text} />
+            </Pressable>
           </View>
         </View>
       </BlurView>
@@ -123,10 +146,15 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 8,
   },
   blur: {
     borderRadius: 14,
     overflow: 'hidden',
+    borderWidth: 1,
   },
   row: {
     flexDirection: 'row',
@@ -176,5 +204,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginLeft: 12,
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
   },
 });

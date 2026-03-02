@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Image, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Collection } from '@/types/groups';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 interface CollectionCardProps {
   collection: Collection;
@@ -10,9 +10,13 @@ interface CollectionCardProps {
 }
 
 function CollectionCard({ collection, onPress }: CollectionCardProps) {
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
+  const overlayBg = isDark ? 'rgba(28,28,30,0.88)' : 'rgba(250,248,242,0.96)';
   return (
     <TouchableOpacity
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: isDark ? '#000' : darkColor }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -24,16 +28,16 @@ function CollectionCard({ collection, onPress }: CollectionCardProps) {
           resizeMode="cover"
         />
       ) : (
-        <View style={styles.coverPlaceholder}>
-          <Ionicons name="folder" size={32} color="#999" />
+        <View style={[styles.coverPlaceholder, { backgroundColor: theme.background }]}>
+          <Ionicons name="folder" size={32} color={theme.icon} />
         </View>
       )}
 
       {/* Overlay pour le contenu */}
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, { backgroundColor: overlayBg }]}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.name} numberOfLines={1}>
+            <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
               {collection.name}
             </Text>
             {!collection.isPrivate && collection.sharedWithGroups.length > 0 && (
@@ -42,27 +46,27 @@ function CollectionCard({ collection, onPress }: CollectionCardProps) {
               </View>
             )}
             {collection.isPrivate && (
-              <View style={styles.privateBadge}>
-                <Ionicons name="lock-closed" size={12} color="#666" />
+              <View style={[styles.privateBadge, { backgroundColor: theme.background }]}>
+                <Ionicons name="lock-closed" size={12} color={theme.icon} />
               </View>
             )}
           </View>
 
           {collection.description && (
-            <Text style={styles.description} numberOfLines={2}>
+            <Text style={[styles.description, { color: theme.icon }]} numberOfLines={2}>
               {collection.description}
             </Text>
           )}
 
           <View style={styles.footer}>
             <View style={styles.placesInfo}>
-              <Ionicons name="location" size={14} color="#666" />
-              <Text style={styles.placesCount}>
+              <Ionicons name="location" size={14} color={theme.icon} />
+              <Text style={[styles.placesCount, { color: theme.text }]}>
                 {collection.placesCount} lieu{collection.placesCount > 1 ? 'x' : ''}
               </Text>
             </View>
             {collection.sharedWithGroups.length > 0 && (
-              <Text style={styles.sharedText}>
+              <Text style={[styles.sharedText, { color: theme.icon }]}>
                 Partagé avec {collection.sharedWithGroups.length} groupe{collection.sharedWithGroups.length > 1 ? 's' : ''}
               </Text>
             )}
@@ -72,7 +76,7 @@ function CollectionCard({ collection, onPress }: CollectionCardProps) {
 
       {/* Chevron */}
       <View style={styles.chevronContainer}>
-        <Ionicons name="chevron-forward" size={20} color="#CCC" />
+        <Ionicons name="chevron-forward" size={20} color={theme.border} />
       </View>
     </TouchableOpacity>
   );
@@ -81,12 +85,10 @@ function CollectionCard({ collection, onPress }: CollectionCardProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
     borderRadius: 12,
     marginBottom: 12,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E5E5E5',
     shadowColor: darkColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -104,13 +106,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     padding: 12,
     justifyContent: 'space-between',
     borderLeftWidth: 4,
@@ -129,7 +129,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: darkColor,
     marginRight: 8,
   },
   sharedBadge: {
@@ -144,13 +143,11 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   description: {
     fontSize: 13,
-    color: '#666',
     marginBottom: 8,
     flex: 1,
   },
@@ -167,11 +164,9 @@ const styles = StyleSheet.create({
   placesCount: {
     fontSize: 13,
     fontWeight: '500',
-    color: darkColor,
   },
   sharedText: {
     fontSize: 11,
-    color: '#999',
   },
   chevronContainer: {
     position: 'absolute',
@@ -179,7 +174,7 @@ const styles = StyleSheet.create({
     top: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(0,0,0,0.06)',
     width: 32,
     height: 32,
     borderRadius: 16,

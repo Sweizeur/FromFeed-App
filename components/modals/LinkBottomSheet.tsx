@@ -9,10 +9,11 @@ import {
   Keyboard,
   Platform,
   ActivityIndicator,
+  useColorScheme,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { darkColor, darkColorWithAlpha } from '@/constants/theme';
+import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -48,6 +49,9 @@ export default function LinkBottomSheet({
   onStartProcessing,
 }: LinkBottomSheetProps) {
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const translateY = useSharedValue(0);
   const opacity = useSharedValue(0);
   const keyboardOffset = useSharedValue(0);
@@ -147,6 +151,7 @@ export default function LinkBottomSheet({
         <Animated.View
           style={[
             styles.bottomSheet,
+            { backgroundColor: theme.surface, shadowColor: isDark ? '#000' : darkColor },
             { paddingBottom: insets.bottom + 20 },
             animatedSheetStyle,
           ]}
@@ -168,17 +173,17 @@ export default function LinkBottomSheet({
           }}
         >
           {/* Grabber */}
-          <View style={styles.bottomSheetGrabber} />
+          <View style={[styles.bottomSheetGrabber, { backgroundColor: theme.border }]} />
 
           {/* Header */}
           <View style={styles.bottomSheetHeader}>
-            <Text style={styles.bottomSheetTitle}>Ajouter un lien</Text>
+            <Text style={[styles.bottomSheetTitle, { color: theme.text }]}>Ajouter un lien</Text>
             <TouchableOpacity
               onPress={onClose}
-              style={styles.bottomSheetCloseButton}
+              style={[styles.bottomSheetCloseButton, { backgroundColor: theme.background, borderColor: theme.border }]}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={22} color="#666" />
+              <Ionicons name="close" size={22} color={theme.icon} />
             </TouchableOpacity>
           </View>
 
@@ -188,26 +193,26 @@ export default function LinkBottomSheet({
             {isLoading && (
               <View style={styles.loadingOverlay}>
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#1A1A1A" />
-                  <Text style={styles.loadingText}>Analyse du lien en cours...</Text>
-                  <Text style={styles.loadingSubtext}>
+                  <ActivityIndicator size="large" color={theme.text} />
+                  <Text style={[styles.loadingText, { color: theme.text }]}>Analyse du lien en cours...</Text>
+                  <Text style={[styles.loadingSubtext, { color: theme.icon }]}>
                     Extraction des informations du lieu
                   </Text>
                 </View>
               </View>
             )}
 
-            <View style={styles.bottomSheetInputContainer}>
+            <View style={[styles.bottomSheetInputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
               <Ionicons
                 name="link-outline"
                 size={20}
-                color="#999"
+                color={theme.icon}
                 style={styles.bottomSheetInputIcon}
               />
               <TextInput
-                style={styles.bottomSheetInput}
+                style={[styles.bottomSheetInput, { color: theme.text }]}
                 placeholder="Collez votre lien TikTok, Instagram..."
-                placeholderTextColor="#999"
+                placeholderTextColor={theme.icon}
                 value={linkInput}
                 onChangeText={(text) => {
                   onLinkInputChange(text);
@@ -276,7 +281,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: darkColor,
@@ -290,7 +294,6 @@ const styles = StyleSheet.create({
   bottomSheetGrabber: {
     width: 40,
     height: 4,
-    backgroundColor: '#E0E0E0',
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 12,
@@ -307,16 +310,15 @@ const styles = StyleSheet.create({
   bottomSheetTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: darkColor,
     letterSpacing: -0.5,
   },
   bottomSheetCloseButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   bottomSheetContent: {
     paddingHorizontal: 24,
@@ -325,13 +327,11 @@ const styles = StyleSheet.create({
   bottomSheetInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
   },
   bottomSheetInputIcon: {
     marginRight: 12,
@@ -339,7 +339,6 @@ const styles = StyleSheet.create({
   bottomSheetInput: {
     flex: 1,
     fontSize: 16,
-    color: darkColor,
     padding: 0,
   },
   bottomSheetButton: {
@@ -376,12 +375,10 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#1A1A1A',
     marginTop: 8,
   },
   loadingSubtext: {
     fontSize: 14,
-    color: '#666',
     textAlign: 'center',
   },
 });

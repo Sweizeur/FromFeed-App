@@ -1,379 +1,324 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
   ActivityIndicator,
-  LayoutChangeEvent,
   Text,
-  Keyboard,
-  TouchableWithoutFeedback,
+  Pressable,
+  useColorScheme,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import MapView, { Marker } from 'react-native-maps';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { Marker } from 'react-native-maps';
+import ClusteredMapView from 'react-native-map-clustering';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
-import SlidingCard, { SlidingCardRef } from '@/components/common/SlidingCard';
-import MapHeader from '@/components/navigation/MapHeader';
-import PlaceTransition from '@/components/places/PlaceTransition';
-import AddToCollectionModal from '@/components/collections/AddToCollectionModal';
-import AddPlacesToCollectionModal from '@/components/collections/AddPlacesToCollectionModal';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import Toast from '@/components/common/Toast';
-import { getCollection, getAllPlacesSummary, deletePlace, type Place, type PlaceSummary } from '@/lib/api';
+import GlassButton from '@/components/ui/GlassButton';
+import { getCollection, getAllPlacesSummary, type PlaceSummary } from '@/lib/api';
 import { useMap } from '@/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
-import { matchesTypeFilter } from '@/utils/typeHierarchy';
-import { darkColor } from '@/constants/theme';
+import { darkColor, Colors } from '@/constants/theme';
 
-const HEADER_WHITE_HEIGHT = 120;
-const BOTTOM_NAV_HEIGHT = 52;
+const CLUSTER_RED = '#E53935';
+const CLUSTER_SIZE = 32;
+const CLUSTER_FONT_SIZE = 12;
+const DEFAULT_MARKER_EMOJI = '📍';
+const MARKER_EMOJI_SIZE = 28;
+const MARKER_EMOJI_BOX = 40;
 
 export default function CollectionDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  
-  const { region, loadingLocation, mapViewRef, animateToPlace } = useMap();
-  const { toast, showSuccess, showError, hideToast } = useToast();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
 
-  // État local
-  const [collection, setCollection] = useState<any>(null);
+  const { region, loadingLocation, mapViewRef, animateToUser, startWatchingUser, stopWatchingUser, isProgrammaticChange } = useMap();
+  const { toast, showError, hideToast } = useToast();
+
+  const [collectionName, setCollectionName] = useState('');
   const [collectionPlaces, setCollectionPlaces] = useState<PlaceSummary[]>([]);
-  const [allPlaces, setAllPlaces] = useState<PlaceSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
-  const [headerHeight, setHeaderHeight] = useState(0);
-  const [isAddToCollectionModalVisible, setIsAddToCollectionModalVisible] = useState(false);
-  const [selectedPlaceForCollection, setSelectedPlaceForCollection] = useState<string | null>(null);
-  const [isAddPlacesModalVisible, setIsAddPlacesModalVisible] = useState(false);
-  
-  // Filtres
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<string | null>(null);
-  
-  // Refs
-  const slidingCardRef = useRef<SlidingCardRef>(null);
-  const placeDetailsScrollViewRef = useRef<any>(null);
-  const cardTranslateY = useSharedValue(0);
-  const placesListKey = useRef(0);
+  const [followUser, setFollowUser] = useState(false);
 
-  // Charger la collection et les lieux
-  useEffect(() => {
-    const loadData = async () => {
-      if (!id) return;
-      try {
-        setLoading(true);
-        const [collectionResponse, allPlacesResponse] = await Promise.all([
-          getCollection(id),
-          getAllPlacesSummary(),
-        ]);
-        
-        setCollection(collectionResponse.collection);
-        setAllPlaces(allPlacesResponse.places);
-        
-        // Convertir les lieux de la collection en PlaceSummary complets
-        const collectionPlaceIds = new Set(
-          collectionResponse.collection.places.map((cp: any) => cp.placeId)
-        );
-        
-        const fullCollectionPlaces = allPlacesResponse.places
-          .filter((place) => collectionPlaceIds.has(place.id))
-          .map((place) => ({
-            ...place,
-            // S'assurer que les coordonnées sont présentes
-            lat: place.lat ?? undefined,
-            lon: place.lon ?? undefined,
-          }));
-        
-        setCollectionPlaces(fullCollectionPlaces);
-      } catch (error) {
-        __DEV__ && console.error('[CollectionDetail] Erreur lors du chargement:', error);
-        showError('Impossible de charger la collection');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [id]);
-
-  const refreshCollection = async () => {
+  const loadCollection = useCallback(async () => {
     if (!id) return;
     try {
-      setRefreshing(true);
-      // skipCache=true pour forcer la mise à jour depuis la DB lors d'un reload manuel
-      const [collectionResponse, allPlacesResponse] = await Promise.all([
+      setLoading(true);
+      const [colRes, placesRes] = await Promise.all([
         getCollection(id),
-        getAllPlacesSummary(true),
+        getAllPlacesSummary(),
       ]);
-      
-      setCollection(collectionResponse.collection);
-      setAllPlaces(allPlacesResponse.places);
-      
-      const collectionPlaceIds = new Set(
-        collectionResponse.collection.places.map((cp: any) => cp.placeId)
-      );
-      
-      const fullCollectionPlaces = allPlacesResponse.places
-        .filter((place) => collectionPlaceIds.has(place.id))
-        .map((place) => ({
-          ...place,
-          lat: place.lat ?? undefined,
-          lon: place.lon ?? undefined,
-        }));
-      
-      setCollectionPlaces(fullCollectionPlaces);
-      placesListKey.current += 1;
-    } catch (error) {
-      __DEV__ && console.error('[CollectionDetail] Erreur lors du rafraîchissement:', error);
+      setCollectionName(colRes.collection.name);
+      const placeIds = new Set(colRes.collection.places.map((cp: any) => cp.placeId));
+      setCollectionPlaces(placesRes.places.filter((p) => placeIds.has(p.id)));
+    } catch {
+      showError('Impossible de charger la collection');
     } finally {
-      setRefreshing(false);
+      setLoading(false);
     }
-  };
+  }, [id]);
 
-  const handlePlacePress = async (place: Place | PlaceSummary) => {
-    // Si c'est un PlaceSummary, on peut juste l'utiliser directement
-    // ou charger les détails si nécessaire
-    setSelectedPlace(place as Place);
-    await animateToPlace(place);
-    if (slidingCardRef.current) {
-      slidingCardRef.current.animateToSnapPoint(50);
+  useFocusEffect(
+    useCallback(() => {
+      loadCollection();
+    }, [loadCollection])
+  );
+
+  const validPlaces = useMemo(
+    () => collectionPlaces.filter((p) => p.lat != null && p.lon != null && !isNaN(p.lat) && !isNaN(p.lon)),
+    [collectionPlaces]
+  );
+
+  const handleCenterUser = useCallback(async () => {
+    if (followUser) {
+      setFollowUser(false);
+      stopWatchingUser();
+    } else {
+      setFollowUser(true);
+      await startWatchingUser();
+      await animateToUser();
     }
-  };
+  }, [followUser, startWatchingUser, stopWatchingUser, animateToUser]);
 
-  const clearSelectedPlace = () => {
-    setSelectedPlace(null);
-  };
-
-  const handleDeletePlaces = async (placeIds: string[]) => {
-    try {
-      // Supprimer les lieux de la collection (pas les lieux eux-mêmes)
-      // TODO: Implémenter removePlaceFromCollection
-      showSuccess(`${placeIds.length} lieu${placeIds.length > 1 ? 'x' : ''} retiré${placeIds.length > 1 ? 's' : ''} de la collection`);
-      await refreshCollection();
-    } catch (error) {
-      __DEV__ && console.error('[CollectionDetail] Erreur lors de la suppression:', error);
-      showError('Une erreur est survenue lors de la suppression des lieux.');
+  const handleRegionChangeComplete = useCallback(() => {
+    if (isProgrammaticChange()) return;
+    if (followUser) {
+      setFollowUser(false);
+      stopWatchingUser();
     }
-  };
+  }, [followUser, isProgrammaticChange, stopWatchingUser]);
 
-  const handleHeaderContainerLayout = (event: LayoutChangeEvent) => {
-    const { height } = event.nativeEvent.layout;
-    setHeaderHeight(height);
-  };
+  const nameMatch = collectionName.match(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F?)\s*(.*)$/u);
+  const displayEmoji = nameMatch ? nameMatch[1] : '📁';
+  const displayName = nameMatch ? nameMatch[2] : collectionName;
 
-  const handleCategoryChange = (category: string | null) => {
-    setSelectedCategory(category);
-    setSelectedType(null);
-  };
-
-  // Filtrer les places selon les filtres sélectionnés
-  const filteredPlaces = useMemo(() => {
-    return collectionPlaces.filter((place) => {
-      if (selectedCategory && place.category !== selectedCategory) {
-        return false;
-      }
-      if (selectedCategory && selectedType && !matchesTypeFilter(place.type, selectedType)) {
-        return false;
-      }
-      return true;
-    });
-  }, [collectionPlaces, selectedCategory, selectedType]);
-
-  const mapContainerAnimatedStyle = useAnimatedStyle(() => {
-    const mapHeight = HEADER_WHITE_HEIGHT + cardTranslateY.value;
-    return {
-      height: mapHeight,
-    };
-  });
+  const pillBg = isDark ? 'rgba(58,59,61,0.6)' : 'rgba(250,248,242,0.92)';
+  const pillBorder = isDark ? 'rgba(255,255,255,0.10)' : theme.border;
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={darkColor} />
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={theme.text} />
         </View>
       </View>
     );
   }
-
-  if (!collection) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Collection introuvable</Text>
-        </View>
-      </View>
-    );
-  }
-
-  // Filtrer les places valides pour la carte
-  const validPlacesForMap = filteredPlaces.filter(
-    (place) => place.lat != null && place.lon != null && !isNaN(place.lat) && !isNaN(place.lon)
-  );
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
-        {/* Header avec titre de la collection */}
-        <MapHeader
-          onLayout={handleHeaderContainerLayout}
-          onAddLinkPress={() => {
-            setIsAddPlacesModalVisible(true);
-          }}
-          places={filteredPlaces}
-          selectedCategory={selectedCategory}
-          selectedType={selectedType}
-          onCategoryChange={handleCategoryChange}
-          onTypeChange={setSelectedType}
-          title={collection.name}
-          showBackButton
-          onBackPress={() => router.back()}
-          hideAIButton
-          hideNotificationButton
-        />
-
-        {/* Carte */}
-        <Animated.View style={[styles.mapContainer, mapContainerAnimatedStyle]}>
-          {loadingLocation && (
-            <View style={styles.mapLoading}>
-              <ActivityIndicator size="large" color={darkColor} />
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Header - same style as MapTabHeader */}
+      <View style={[styles.headerOuter, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        <BlurView
+          intensity={isDark ? 70 : 60}
+          tint={isDark ? 'dark' : 'light'}
+          style={[
+            styles.blur,
+            {
+              backgroundColor: isDark ? 'rgba(28,28,30,0.85)' : 'rgba(250,248,242,0.88)',
+              borderColor: pillBorder,
+            },
+          ]}
+        >
+          <View style={styles.headerRow}>
+            <View style={styles.headerLeft}>
+              <Pressable
+                onPress={() => router.back()}
+                hitSlop={12}
+                style={[styles.backButton, { backgroundColor: pillBg, borderColor: pillBorder }]}
+              >
+                <Ionicons name="chevron-back" size={20} color={theme.text} />
+              </Pressable>
+              <View style={styles.headerTextCol}>
+                <Text style={[styles.headerName, { color: theme.text }]} numberOfLines={1}>
+                  {displayEmoji} {displayName}
+                </Text>
+                <Pressable onPress={() => router.push({ pathname: '/edit-collection-places', params: { id } })} hitSlop={4}>
+                  <Text style={[styles.headerCount, { color: theme.icon }]}>
+                    {collectionPlaces.length} lieu{collectionPlaces.length !== 1 ? 'x' : ''}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-          )}
-          
-          {!loadingLocation && region && (
-            <MapView
-              ref={mapViewRef}
-              style={StyleSheet.absoluteFill}
-              initialRegion={region}
-              showsUserLocation
-              showsMyLocationButton={false}
-              toolbarEnabled={false}
-            >
-              {validPlacesForMap.map((place) => (
-                <Marker
-                  key={place.id}
-                  coordinate={{
-                    latitude: place.lat!,
-                    longitude: place.lon!,
-                  }}
-                  title={place.placeName || place.rawTitle || 'Lieu'}
-                  description={place.googleFormattedAddress || place.address || undefined}
-                  onPress={() => handlePlacePress(place)}
-                />
-              ))}
-            </MapView>
-          )}
-          
-          {!loadingLocation && !region && (
-            <View style={styles.mapLoading}>
-              <ActivityIndicator size="large" color={darkColor} />
+            <View style={styles.headerActions}>
+              <GlassButton
+                icon="add"
+                onPress={() => router.push({ pathname: '/edit-collection-places', params: { id } })}
+                accessibilityLabel="Gérer les lieux"
+                textColor={theme.text}
+                backgroundColor={isDark ? '#3a3b3d' : pillBg}
+                borderColor={isDark ? '#3a3b3d' : pillBorder}
+              />
             </View>
-          )}
-        </Animated.View>
-
-        {/* Carte coulissante */}
-        {headerHeight > 0 && (
-          <SlidingCard
-            ref={slidingCardRef}
-            headerHeight={headerHeight}
-            headerWhiteHeight={HEADER_WHITE_HEIGHT}
-            bottomNavHeight={insets.bottom}
-            initialSnap="mid"
-            enableFling
-            grabber
-            onPositionChange={(translateY) => {
-              cardTranslateY.value = translateY;
-            }}
-          >
-            <PlaceTransition
-              selectedPlace={selectedPlace}
-              placesSummary={filteredPlaces}
-              placesListKey={placesListKey.current}
-              onPlacePress={handlePlacePress}
-              onBack={clearSelectedPlace}
-              scrollViewRef={placeDetailsScrollViewRef}
-              onRefreshPlaces={refreshCollection}
-              refreshingPlaces={refreshing}
-              onRatingUpdated={refreshCollection}
-              onDeletePlaces={handleDeletePlaces}
-              onAddToCollection={(placeId) => {
-                setSelectedPlaceForCollection(placeId);
-                setIsAddToCollectionModalVisible(true);
-              }}
-            />
-          </SlidingCard>
-        )}
-
-        {/* Modal Ajouter à une collection */}
-        {selectedPlaceForCollection && (
-          <AddToCollectionModal
-            visible={isAddToCollectionModalVisible}
-            onClose={() => {
-              setIsAddToCollectionModalVisible(false);
-              setSelectedPlaceForCollection(null);
-            }}
-            placeId={selectedPlaceForCollection}
-            onSuccess={() => {
-              refreshCollection();
-            }}
-          />
-        )}
-
-        {/* Modal Ajouter des lieux à la collection */}
-        {id && (
-          <AddPlacesToCollectionModal
-            visible={isAddPlacesModalVisible}
-            onClose={() => {
-              setIsAddPlacesModalVisible(false);
-            }}
-            collectionId={id}
-            existingPlaceIds={collectionPlaces.map((place) => place.id)}
-            onSuccess={() => {
-              refreshCollection();
-            }}
-          />
-        )}
-
-        {/* Toast */}
-        <Toast
-          visible={toast.visible}
-          message={toast.message}
-          type={toast.type}
-          onHide={hideToast}
-        />
+          </View>
+        </BlurView>
       </View>
-    </TouchableWithoutFeedback>
+
+      {/* Map */}
+      <View style={styles.mapContainer}>
+        {loadingLocation && (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={theme.text} />
+          </View>
+        )}
+        {!loadingLocation && region && (
+          <ClusteredMapView
+            ref={mapViewRef}
+            style={StyleSheet.absoluteFillObject}
+            initialRegion={region}
+            showsUserLocation
+            onRegionChangeComplete={handleRegionChangeComplete}
+            clusterColor={CLUSTER_RED}
+            clusterTextColor="#FFFFFF"
+            renderCluster={({ id: cId, geometry, properties, onPress }) => (
+              <Marker
+                key={`cluster-${cId}-${properties.point_count}`}
+                coordinate={{ latitude: geometry.coordinates[1], longitude: geometry.coordinates[0] }}
+                onPress={onPress}
+              >
+                <View style={clusterStyles.bubble}>
+                  <Text style={clusterStyles.count} numberOfLines={1}>{properties.point_count}</Text>
+                </View>
+              </Marker>
+            )}
+          >
+            {validPlaces.map((place) => (
+              <Marker
+                key={place.id}
+                coordinate={{ latitude: place.lat!, longitude: place.lon! }}
+                title={place.placeName || place.rawTitle || 'Lieu'}
+                description={place.googleFormattedAddress || place.address || undefined}
+                tracksViewChanges={false}
+              >
+                <View style={[markerStyles.emojiBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Text style={markerStyles.emoji}>{place.markerEmoji ?? DEFAULT_MARKER_EMOJI}</Text>
+                </View>
+              </Marker>
+            ))}
+          </ClusteredMapView>
+        )}
+        {!loadingLocation && !region && (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={theme.text} />
+          </View>
+        )}
+
+        {/* Center user button */}
+        {!loadingLocation && region && (
+          <View style={[styles.centerUserButton, { bottom: insets.bottom + 24 }]} pointerEvents="box-none">
+            <GlassButton
+              icon="locate"
+              onPress={handleCenterUser}
+              active={followUser}
+              activeTint="#0a7ea4"
+              activeTextColor="#fff"
+              textColor={theme.text}
+              backgroundColor={theme.background}
+            />
+          </View>
+        )}
+      </View>
+
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
+  container: { flex: 1 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  headerOuter: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 10,
   },
-  mapContainer: {
-    position: 'relative',
-    width: '100%',
+  blur: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
   },
-  mapLoading: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
+    minWidth: 0,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
-  loadingContainer: {
+  headerTextCol: {
+    marginLeft: 12,
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    minWidth: 0,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+  headerActions: {
+    marginLeft: 8,
   },
-  errorText: {
-    fontSize: 18,
+  headerName: {
+    fontSize: 15,
     fontWeight: '600',
-    color: darkColor,
+  },
+  headerCount: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  mapContainer: { flex: 1, position: 'relative', width: '100%' },
+  centerUserButton: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 10,
+  },
+});
+
+const clusterStyles = StyleSheet.create({
+  bubble: {
+    width: CLUSTER_SIZE,
+    height: CLUSTER_SIZE,
+    borderRadius: CLUSTER_SIZE / 2,
+    backgroundColor: CLUSTER_RED,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  count: {
+    color: '#FFFFFF',
+    fontSize: CLUSTER_FONT_SIZE,
+    fontWeight: '600',
+  },
+});
+
+const markerStyles = StyleSheet.create({
+  emojiBox: {
+    width: MARKER_EMOJI_BOX,
+    height: MARKER_EMOJI_BOX,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: MARKER_EMOJI_BOX / 2,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  emoji: {
+    fontSize: MARKER_EMOJI_SIZE,
+    lineHeight: MARKER_EMOJI_BOX,
+    textAlign: 'center',
   },
 });

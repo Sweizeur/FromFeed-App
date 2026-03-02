@@ -10,10 +10,11 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  useColorScheme,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { darkColor, darkColorWithAlpha } from '@/constants/theme';
+import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -76,6 +77,9 @@ export default function AddToCollectionModal({
   onSuccess,
 }: AddToCollectionModalProps) {
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const screenHeight = Dimensions.get('window').height;
   const FIXED_SHEET_HEIGHT = screenHeight * 0.6; // 60% de la hauteur de l'écran
   const translateY = useSharedValue(FIXED_SHEET_HEIGHT);
@@ -118,9 +122,9 @@ export default function AddToCollectionModal({
             getCollections(),
             getPlaceCollections(placeId).catch(() => ({ collectionIds: [] })), // Ignorer l'erreur si le lieu n'est pas dans de collections
           ]);
-          setCollections(collectionsResponse.collections as Collection[]);
+          setCollections((collectionsResponse?.collections ?? []) as Collection[]);
           // Pré-sélectionner les collections qui contiennent déjà le lieu
-          const initialIds = placeCollectionsResponse.collectionIds;
+          const initialIds = placeCollectionsResponse?.collectionIds ?? [];
           setInitialCollectionIds(initialIds);
           setSelectedCollectionIds(initialIds);
         } catch (error) {
@@ -263,22 +267,23 @@ export default function AddToCollectionModal({
         <Animated.View
           style={[
             styles.bottomSheet,
+            { backgroundColor: theme.surface, shadowColor: isDark ? '#000' : darkColor },
             { height: FIXED_SHEET_HEIGHT },
             animatedSheetStyle,
           ]}
         >
           {/* Grabber */}
-          <View style={styles.bottomSheetGrabber} />
+          <View style={[styles.bottomSheetGrabber, { backgroundColor: theme.border }]} />
 
           {/* Header */}
           <View style={styles.bottomSheetHeader}>
-            <Text style={styles.bottomSheetTitle}>Ajouter à une collection</Text>
+            <Text style={[styles.bottomSheetTitle, { color: theme.text }]}>Ajouter à une collection</Text>
             <TouchableOpacity
               onPress={onClose}
-              style={styles.bottomSheetCloseButton}
+              style={[styles.bottomSheetCloseButton, { backgroundColor: theme.background, borderColor: theme.border }]}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={22} color="#666" />
+              <Ionicons name="close" size={22} color={theme.icon} />
             </TouchableOpacity>
           </View>
 
@@ -301,9 +306,9 @@ export default function AddToCollectionModal({
               </View>
             ) : collections.length === 0 ? (
               <View style={styles.emptyState}>
-                <Ionicons name="folder-outline" size={48} color="#CCC" />
-                <Text style={styles.emptyStateText}>Aucune collection</Text>
-                <Text style={styles.emptyStateSubtext}>
+                <Ionicons name="folder-outline" size={48} color={theme.border} />
+                <Text style={[styles.emptyStateText, { color: theme.text }]}>Aucune collection</Text>
+                <Text style={[styles.emptyStateSubtext, { color: theme.icon }]}>
                   Créez une collection depuis l'onglet "Mes Collections"
                 </Text>
               </View>
@@ -314,6 +319,7 @@ export default function AddToCollectionModal({
                     key={collection.id}
                     style={[
                       styles.collectionItem,
+                      { backgroundColor: theme.background, borderColor: theme.border },
                       selectedCollectionIds.includes(collection.id) && styles.collectionItemSelected,
                     ]}
                     onPress={() => handleToggleCollection(collection.id)}
@@ -328,6 +334,7 @@ export default function AddToCollectionModal({
                         <Text
                           style={[
                             styles.collectionItemText,
+                            { color: theme.text },
                             selectedCollectionIds.includes(collection.id) && styles.collectionItemTextSelected,
                           ]}
                         >
@@ -337,6 +344,7 @@ export default function AddToCollectionModal({
                           <Text
                             style={[
                               styles.collectionItemCount,
+                              { color: theme.icon },
                               selectedCollectionIds.includes(collection.id) && styles.collectionItemCountSelected,
                             ]}
                           >
@@ -387,7 +395,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: darkColor,
@@ -399,7 +406,6 @@ const styles = StyleSheet.create({
   bottomSheetGrabber: {
     width: 40,
     height: 4,
-    backgroundColor: '#E0E0E0',
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 12,
@@ -416,15 +422,14 @@ const styles = StyleSheet.create({
   bottomSheetTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: darkColor,
   },
   bottomSheetCloseButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   bottomSheetContent: {
     flex: 1,
@@ -472,13 +477,11 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 18,
     fontWeight: '600',
-    color: darkColor,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#666',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
@@ -490,11 +493,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8F8F8',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   collectionItemSelected: {
     backgroundColor: darkColor,
@@ -512,14 +513,12 @@ const styles = StyleSheet.create({
   collectionItemText: {
     fontSize: 16,
     fontWeight: '500',
-    color: darkColor,
   },
   collectionItemTextSelected: {
     color: '#fff',
   },
   collectionItemCount: {
     fontSize: 13,
-    color: '#666',
     marginTop: 2,
   },
   collectionItemCountSelected: {

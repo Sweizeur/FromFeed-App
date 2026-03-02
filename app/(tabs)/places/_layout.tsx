@@ -13,11 +13,11 @@ const SearchContext = createContext<SearchContextValue | null>(null);
 
 export function useSearchText() {
   const ctx = useContext(SearchContext);
-  if (!ctx) throw new Error('useSearchText must be used inside search layout');
+  if (!ctx) throw new Error('useSearchText must be used inside places layout');
   return ctx;
 }
 
-export default function SearchLayout() {
+export default function PlacesLayout() {
   const router = useRouter();
   const [searchText, setSearchText] = useState('');
   const colorScheme = useColorScheme();
@@ -38,7 +38,7 @@ export default function SearchLayout() {
   const screenOptions = useMemo(
     () => ({
       headerShown: true,
-      title: 'Rechercher',
+      title: 'Mes Lieux',
       headerLargeTitle: false,
       headerLargeTitleStyle: { color: theme.text },
       headerTintColor: theme.text,
@@ -70,6 +70,8 @@ export default function SearchLayout() {
       ),
       headerSearchBarOptions: {
         placeholder: 'Vidéo, lieu, adresse...',
+        barTintColor: theme.background,
+        tintColor: theme.text,
         onChangeText: handleChangeText,
       },
     }),

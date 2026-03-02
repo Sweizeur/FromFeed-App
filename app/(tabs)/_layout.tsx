@@ -16,7 +16,7 @@ export default function TabsLayout() {
         <Icon sf="map.fill" />
         <Label>Ma Carte</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="collections">
+      <NativeTabs.Trigger name="social">
         <Icon sf="folder.fill" />
         <Label>Bibliothèque</Label>
       </NativeTabs.Trigger>
@@ -24,9 +24,9 @@ export default function TabsLayout() {
         <Icon sf="gearshape.fill" />
         <Label>Profil</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="search" role="search">
-        <Icon sf="magnifyingglass" />
-        <Label>Search</Label>
+      <NativeTabs.Trigger name="places" role="search">
+        <Icon sf="list.bullet" />
+        <Label>Lieux</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

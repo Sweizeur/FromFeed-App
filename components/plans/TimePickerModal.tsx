@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 interface TimePickerModalProps {
   visible: boolean;
@@ -12,21 +12,24 @@ interface TimePickerModalProps {
 
 export default function TimePickerModal({ visible, time, onTimeChange, onClose }: TimePickerModalProps) {
   if (!visible) return null;
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
 
   return (
-    <View style={styles.modal}>
-      <View style={styles.modalHeader}>
-        <Text style={styles.modalTitle}>Heure</Text>
+    <View style={[styles.modal, { backgroundColor: theme.surface, shadowColor: isDark ? '#000' : darkColor }]}>
+      <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+        <Text style={[styles.modalTitle, { color: theme.text }]}>Heure</Text>
         <TouchableOpacity onPress={onClose}>
-          <Ionicons name="close" size={24} color={darkColor} />
+          <Ionicons name="close" size={24} color={theme.text} />
         </TouchableOpacity>
       </View>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { borderColor: theme.border, backgroundColor: theme.background, color: theme.text }]}
         value={time}
         onChangeText={onTimeChange}
         placeholder="HH:mm"
-        placeholderTextColor="#999"
+        placeholderTextColor={theme.icon}
         maxLength={5}
       />
       <TouchableOpacity style={styles.modalButton} onPress={onClose}>
@@ -42,7 +45,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '60%',
@@ -59,21 +61,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: darkColor,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E0E0E0',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: darkColor,
-    backgroundColor: '#fff',
     margin: 16,
   },
   modalButton: {

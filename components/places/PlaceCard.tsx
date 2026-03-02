@@ -43,13 +43,27 @@ const PlaceCard = React.memo(function PlaceCard({
             checkbox: { borderColor: '#555', backgroundColor: '#252628' },
             checkboxSelected: { backgroundColor: theme.tint, borderColor: theme.tint },
           }
-        : {},
+        : {
+            container: { backgroundColor: theme.surface, shadowColor: darkColor },
+            imagePlaceholder: { backgroundColor: theme.background },
+            name: { color: theme.text },
+            address: { color: theme.icon },
+            categoryText: { color: theme.text, backgroundColor: theme.background },
+            notes: { color: theme.icon },
+            personalRating: { color: theme.text },
+            rating: { color: theme.text },
+            addToCollectionButtonTop: { backgroundColor: theme.background },
+            addToCollectionButtonText: { color: theme.text },
+            containerSelected: { backgroundColor: theme.surface, borderColor: theme.text, shadowColor: darkColor },
+            checkbox: { borderColor: theme.border, backgroundColor: theme.surface },
+            checkboxSelected: { backgroundColor: theme.text, borderColor: theme.text },
+          },
     [isDark, theme]
   );
 
-  const iconColor = isDark ? theme.icon : '#666';
-  const starColor = isDark ? theme.text : '#1A1A1A';
-  const chevronColor = isDark ? theme.icon : '#CCC';
+  const iconColor = isDark ? theme.icon : theme.icon;
+  const starColor = isDark ? theme.text : theme.text;
+  const chevronColor = isDark ? theme.icon : theme.border;
 
   const displayName = place.placeName || place.rawTitle || 'Lieu sans nom';
   const displayAddress = place.googleFormattedAddress || place.address || place.city || 'Adresse non disponible';
@@ -208,7 +222,6 @@ export default PlaceCard;
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
     borderRadius: 12,
     marginBottom: 12,
     padding: 12,
@@ -228,7 +241,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 8,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -247,7 +259,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: darkColor,
     marginRight: 8,
   },
   ratingsContainer: {
@@ -263,12 +274,10 @@ const styles = StyleSheet.create({
   rating: {
     fontSize: 14,
     fontWeight: '600',
-    color: darkColor,
   },
   personalRating: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A1A1A',
   },
   addressContainer: {
     flexDirection: 'row',
@@ -279,7 +288,6 @@ const styles = StyleSheet.create({
   address: {
     flex: 1,
     fontSize: 13,
-    color: '#666',
   },
   categoryContainer: {
     marginTop: 6,
@@ -289,8 +297,6 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 12,
     fontWeight: '600',
-    color: darkColor,
-    backgroundColor: '#F0F0F0',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -298,7 +304,6 @@ const styles = StyleSheet.create({
   },
   notes: {
     fontSize: 12,
-    color: '#999',
     marginBottom: 6,
     fontStyle: 'italic',
   },
@@ -342,7 +347,6 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#F5F5F5',
     borderRadius: 8,
     alignSelf: 'flex-start',
     marginTop: 4,
@@ -350,7 +354,6 @@ const styles = StyleSheet.create({
   },
   addToCollectionButtonText: {
     fontSize: 13,
-    color: darkColor,
     fontWeight: '500',
   },
   chevron: {
@@ -378,7 +381,6 @@ const styles = StyleSheet.create({
     borderColor: '#D1D1D6',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
   },
   checkboxSelected: {
     backgroundColor: darkColor,

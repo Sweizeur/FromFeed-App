@@ -10,10 +10,11 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  useColorScheme,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { darkColor, darkColorWithAlpha } from '@/constants/theme';
+import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -36,6 +37,9 @@ export default function CreateGroupModal({
   onSuccess,
 }: CreateGroupModalProps) {
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const translateY = useSharedValue(0);
   const opacity = useSharedValue(0);
   const keyboardOffset = useSharedValue(0);
@@ -182,6 +186,7 @@ export default function CreateGroupModal({
         <Animated.View
           style={[
             styles.bottomSheet,
+            { backgroundColor: theme.surface, shadowColor: isDark ? '#000' : darkColor },
             { paddingBottom: insets.bottom + 20 },
             animatedSheetStyle,
           ]}
@@ -204,17 +209,17 @@ export default function CreateGroupModal({
           }}
         >
           {/* Grabber */}
-          <View style={styles.bottomSheetGrabber} />
+          <View style={[styles.bottomSheetGrabber, { backgroundColor: theme.border }]} />
 
           {/* Header */}
           <View style={styles.bottomSheetHeader}>
-            <Text style={styles.bottomSheetTitle}>Créer un groupe</Text>
+            <Text style={[styles.bottomSheetTitle, { color: theme.text }]}>Créer un groupe</Text>
             <TouchableOpacity
               onPress={onClose}
-              style={styles.bottomSheetCloseButton}
+              style={[styles.bottomSheetCloseButton, { backgroundColor: theme.background, borderColor: theme.border }]}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={22} color="#666" />
+              <Ionicons name="close" size={22} color={theme.icon} />
             </TouchableOpacity>
           </View>
 
@@ -222,10 +227,11 @@ export default function CreateGroupModal({
           <View style={styles.bottomSheetContent}>
             {/* Nom du groupe */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Nom du groupe</Text>
+              <Text style={[styles.label, { color: theme.text }]}>Nom du groupe</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text }]}
                 placeholder="Ex: Ma copine, Les potes..."
+                placeholderTextColor={theme.icon}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -235,7 +241,7 @@ export default function CreateGroupModal({
               />
             </View>
 
-            <Text style={styles.hintText}>
+            <Text style={[styles.hintText, { color: theme.icon }]}>
               Vous pourrez ajouter des membres et personnaliser le groupe après la création
             </Text>
 
@@ -264,7 +270,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: darkColor,
@@ -277,7 +282,6 @@ const styles = StyleSheet.create({
   bottomSheetGrabber: {
     width: 40,
     height: 4,
-    backgroundColor: '#E0E0E0',
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 12,
@@ -294,15 +298,14 @@ const styles = StyleSheet.create({
   bottomSheetTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: darkColor,
   },
   bottomSheetCloseButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   bottomSheetContent: {
     paddingHorizontal: 24,
@@ -315,17 +318,13 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: darkColor,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#F8F8F8',
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    color: darkColor,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   textArea: {
     minHeight: 80,
@@ -343,7 +342,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#F8F8F8',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -356,7 +354,6 @@ const styles = StyleSheet.create({
   emailTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -364,7 +361,6 @@ const styles = StyleSheet.create({
   },
   emailTagText: {
     fontSize: 13,
-    color: darkColor,
   },
   removeEmailButton: {
     marginLeft: 4,
@@ -387,7 +383,6 @@ const styles = StyleSheet.create({
   },
   hintText: {
     fontSize: 13,
-    color: '#666',
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 18,

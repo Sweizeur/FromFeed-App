@@ -28,16 +28,12 @@ interface DraftPlanCardProps {
   colorScheme?: 'light' | 'dark';
 }
 
-const cardBg = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#2C2E30' : '#F9F9F9');
-const cardBorder = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : '#E0E0E0');
-const mutedColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#9BA1A6' : '#666');
-const textColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? Colors.dark.text : darkColor);
-
 export default function DraftPlanCard({ draftPlan, onAddToCalendar, colorScheme = 'light' }: DraftPlanCardProps) {
-  const bg = cardBg(colorScheme);
-  const border = cardBorder(colorScheme);
-  const muted = mutedColor(colorScheme);
-  const text = textColor(colorScheme);
+  const theme = Colors[colorScheme];
+  const bg = theme.surface;
+  const border = theme.border;
+  const muted = theme.icon;
+  const text = theme.text;
 
   const handleCalendarPress = () => {
     Alert.alert(
@@ -118,25 +114,20 @@ const styles = StyleSheet.create({
   draftPlanContainer: {
     marginTop: 12,
     padding: 16,
-    backgroundColor: '#F9F9F9',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   draftPlanTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: darkColor,
     marginBottom: 8,
   },
   draftPlanDate: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 8,
   },
   draftPlanNotes: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 12,
     fontStyle: 'italic',
   },
@@ -147,7 +138,6 @@ const styles = StyleSheet.create({
   draftPlanActivity: {
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   draftPlanActivityLast: {
     borderBottomWidth: 0,

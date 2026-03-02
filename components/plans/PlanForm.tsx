@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  useColorScheme,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +25,7 @@ import { createPlan, updatePlan, getAllPlacesSummary, type PlaceSummary } from '
 import { Plan } from '@/types/api';
 import PlacesPickerModal from './PlacesPickerModal';
 import ActivityRow from './ActivityRow';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 interface PlanFormProps {
   plan: Plan | null; // null = nouveau plan, sinon = édition
@@ -47,6 +48,9 @@ const SHEET_HEIGHT = SCREEN_HEIGHT * 0.75; // 75% de la hauteur de l'écran
 
 export default function PlanForm({ plan, initialDate, onClose, onSave }: PlanFormProps) {
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const translateY = useSharedValue(500);
   const opacity = useSharedValue(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -89,7 +93,7 @@ export default function PlanForm({ plan, initialDate, onClose, onSave }: PlanFor
     try {
       setIsLoading(true);
       const response = await getAllPlacesSummary();
-      setAvailablePlaces(response.places);
+      setAvailablePlaces(response?.places ?? []);
     } catch (error) {
       __DEV__ && console.error('Erreur lors du chargement des places:', error);
     } finally {
@@ -275,6 +279,7 @@ export default function PlanForm({ plan, initialDate, onClose, onSave }: PlanFor
           {
             paddingBottom: insets.bottom,
             height: SHEET_HEIGHT,
+            backgroundColor: theme.surface,
           },
           animatedStyle,
         ]}
@@ -284,30 +289,33 @@ export default function PlanForm({ plan, initialDate, onClose, onSave }: PlanFor
             <View style={styles.handle} />
             
             {/* Header */}
-            <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.headerButton}>
-            <Ionicons name="close" size={24} color={darkColor} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Nouveau</Text>
-          <TouchableOpacity 
-            onPress={handleSave} 
-            style={styles.headerButton}
-            disabled={isSaving}
-          >
-            {isSaving ? (
-              <ActivityIndicator size="small" color={darkColor} />
-            ) : (
-              <Ionicons name="checkmark" size={24} color={darkColor} />
-            )}
-          </TouchableOpacity>
-        </View>
+            <View style={[styles.header, { borderBottomColor: theme.border, backgroundColor: theme.surface }]}>
+              <TouchableOpacity
+                onPress={onClose}
+                style={[styles.headerButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+              >
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+              <Text style={[styles.headerTitle, { color: theme.text }]}>Nouveau</Text>
+              <TouchableOpacity 
+                onPress={handleSave} 
+                style={[styles.headerButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color={theme.text} />
+                ) : (
+                  <Ionicons name="checkmark" size={24} color={theme.text} />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </GestureDetector>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={[styles.content, { backgroundColor: theme.surface }]} showsVerticalScrollIndicator={false}>
           {/* Activités */}
           {activities.length > 0 && (
-            <View style={styles.section}>
+            <View style={[styles.section, { borderBottomColor: theme.border }]}>
               {activities.map((activity, index) => (
                 <ActivityRow
                   key={index}
@@ -320,20 +328,20 @@ export default function PlanForm({ plan, initialDate, onClose, onSave }: PlanFor
           )}
 
           {/* Ajouter une activité */}
-          <TouchableOpacity style={styles.row} onPress={addActivity}>
-            <Text style={styles.rowLabel}>Ajouter un lieu</Text>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
+          <TouchableOpacity style={[styles.row, { borderBottomColor: theme.border }]} onPress={addActivity}>
+            <Text style={[styles.rowLabel, { color: theme.text }]}>Ajouter un lieu</Text>
+            <Ionicons name="chevron-forward" size={20} color={theme.border} />
           </TouchableOpacity>
 
           {/* Notes */}
-          <View style={styles.notesSection}>
-            <Text style={styles.notesLabel}>Notes</Text>
+          <View style={[styles.notesSection, { borderBottomColor: theme.border }]}>
+            <Text style={[styles.notesLabel, { color: theme.text }]}>Notes</Text>
             <TextInput
-              style={styles.notesInput}
+              style={[styles.notesInput, { color: theme.text }]}
               value={notes}
               onChangeText={setNotes}
               placeholder="Ajoutez des notes..."
-              placeholderTextColor="#999"
+              placeholderTextColor={theme.icon}
               multiline
               numberOfLines={4}
             />
@@ -364,7 +372,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     zIndex: 1000,
@@ -395,20 +402,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   headerButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: darkColor,
   },
   content: {
     flex: 1,
@@ -420,11 +425,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   rowLabel: {
     fontSize: 16,
-    color: darkColor,
     fontWeight: '400',
   },
   rowRight: {
@@ -443,22 +446,18 @@ const styles = StyleSheet.create({
   },
   section: {
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   notesSection: {
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   notesLabel: {
     fontSize: 16,
-    color: darkColor,
     fontWeight: '400',
     marginBottom: 8,
   },
   notesInput: {
     fontSize: 16,
-    color: darkColor,
     minHeight: 100,
     textAlignVertical: 'top',
   },

@@ -10,12 +10,13 @@ import {
   Pressable,
   Linking,
   Animated,
+  useColorScheme,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import Svg, { Path } from 'react-native-svg';
 import { getPlaceVideosFeed, linkPlace, deletePlace, getAllPlacesSummary } from '@/lib/api';
 import type { PlaceVideoFeedItem } from '@/types/api';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 import { useToast } from '@/hooks/useToast';
 import Toast from '@/components/common/Toast';
 
@@ -59,6 +60,7 @@ function TikTokEmbedBlock({
   onRemovePlace,
   embedHeight,
   isSaved,
+  theme,
 }: {
   video: PlaceVideoFeedItem;
   isActive: boolean;
@@ -66,6 +68,7 @@ function TikTokEmbedBlock({
   onRemovePlace?: (placeId: string) => Promise<void>;
   embedHeight: number;
   isSaved: boolean;
+  theme: typeof Colors.light;
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pressScaleAnim = useRef(new Animated.Value(1)).current;
@@ -191,7 +194,7 @@ function TikTokEmbedBlock({
   }, []);
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
       <WebView
         ref={webViewRef}
         source={{ uri: embedUri }}
@@ -215,11 +218,11 @@ function TikTokEmbedBlock({
         <View style={styles.captionTextBlock}>
           {(video.rawTitle || video.placeName) && (
             <>
-              <Text style={styles.captionTitle} numberOfLines={2}>
+              <Text style={[styles.captionTitle, { color: theme.text }]} numberOfLines={2}>
                 {video.rawTitle || video.placeName}
               </Text>
               {video.placeName && video.rawTitle && video.placeName !== video.rawTitle && (
-                <Text style={styles.captionPlaceName} numberOfLines={1}>
+                <Text style={[styles.captionPlaceName, { color: theme.icon }]} numberOfLines={1}>
                   {video.placeName}
                 </Text>
               )}
@@ -281,6 +284,9 @@ function TikTokEmbedBlock({
 }
 
 export default function TikTokFeed({ selectedCategory, selectedType, tabFocused = true, searchQuery = '', contentHeight, feedAreaHeight }: TikTokFeedProps) {
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const [videos, setVideos] = useState<PlaceVideoFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -375,8 +381,8 @@ export default function TikTokFeed({ selectedCategory, selectedType, tabFocused 
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={darkColor} />
-        <Text style={styles.hint}>Chargement des vidéos...</Text>
+        <ActivityIndicator size="large" color={theme.text} />
+        <Text style={[styles.hint, { color: theme.icon }]}>Chargement des vidéos...</Text>
       </View>
     );
   }
@@ -384,9 +390,9 @@ export default function TikTokFeed({ selectedCategory, selectedType, tabFocused 
   if (error) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
         <TouchableOpacity onPress={() => loadFeed()}>
-          <Text style={styles.hint}>Réessayer</Text>
+          <Text style={[styles.hint, { color: theme.icon }]}>Réessayer</Text>
         </TouchableOpacity>
       </View>
     );
@@ -395,10 +401,10 @@ export default function TikTokFeed({ selectedCategory, selectedType, tabFocused 
   if (videos.length === 0) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyText}>
+        <Text style={[styles.emptyText, { color: theme.text }]}>
           {searchQuery.trim() ? `Aucun résultat pour « ${searchQuery.trim()} »` : 'Aucune vidéo pour ce filtre'}
         </Text>
-        <Text style={styles.hint}>
+        <Text style={[styles.hint, { color: theme.icon }]}>
           {searchQuery.trim() ? 'Essaie avec le titre de la vidéo, le nom du lieu ou l\'adresse.' : 'Ajoute des lieux depuis des liens TikTok pour les voir ici.'}
         </Text>
       </View>
@@ -434,6 +440,7 @@ export default function TikTokFeed({ selectedCategory, selectedType, tabFocused 
               onRemovePlace={handleRemovePlace}
               embedHeight={embedHeight}
               isSaved={savedPlaceIds.has(video.placeId)}
+              theme={theme}
             />
           </View>
         ))}
@@ -458,10 +465,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   card: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
     alignSelf: 'center',
+    borderWidth: 1,
   },
   webview: {
     backgroundColor: '#000',
@@ -492,12 +499,10 @@ const styles = StyleSheet.create({
   captionTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: darkColor,
     marginBottom: 2,
   },
   captionPlaceName: {
     fontSize: 13,
-    color: '#666',
   },
   addToPlacesButtonWrap: {
     width: 40,
@@ -531,16 +536,13 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 14,
-    color: '#666',
     marginTop: 8,
   },
   errorText: {
     fontSize: 16,
-    color: darkColor,
   },
   emptyText: {
     fontSize: 16,
-    color: darkColor,
     textAlign: 'center',
   },
 });

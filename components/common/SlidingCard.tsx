@@ -1,5 +1,5 @@
 import React, { useEffect, useImperativeHandle, forwardRef } from 'react';
-import { View, StyleSheet, Dimensions, LayoutChangeEvent } from 'react-native';
+import { View, StyleSheet, Dimensions, LayoutChangeEvent, useColorScheme } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -11,7 +11,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -126,6 +126,9 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
   scrollViewRef: propScrollViewRef,
 }, ref) {
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const [measuredHeaderHeight, setMeasuredHeaderHeight] = React.useState(0);
   const [isInitialized, setIsInitialized] = React.useState(false);
 
@@ -581,6 +584,7 @@ const SlidingCard = forwardRef<SlidingCardRef, SlidingCardProps>(function Slidin
       testID={testID}
       style={[
         styles.card,
+        { backgroundColor: theme.surface },
         {
           height: cardH,
           top: headerWhiteH, // Positionner sous le header blanc uniquement
@@ -614,7 +618,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     shadowColor: darkColor,

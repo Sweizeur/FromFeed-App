@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Linking,
   Platform,
+  useColorScheme,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +15,7 @@ import { Place } from '@/types/api';
 import { updatePlaceRating } from '@/lib/api';
 import PersonalRatingStars from './PersonalRatingStars';
 import PlaceInfoSection from './PlaceInfoSection';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 interface PlaceDetailsProps {
   place: Place;
@@ -24,6 +25,9 @@ interface PlaceDetailsProps {
 }
 
 export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpdated }: PlaceDetailsProps) {
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const internalScrollViewRef = useRef<ScrollView>(null);
   const scrollRef = scrollViewRef || internalScrollViewRef;
   const displayName = place.placeName || place.rawTitle || 'Lieu sans nom';
@@ -138,7 +142,7 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
   return (
     <ScrollView 
       ref={scrollRef}
-      style={styles.container} 
+      style={[styles.container, { backgroundColor: theme.background }]} 
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
       nestedScrollEnabled={true}
@@ -146,11 +150,11 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
       bounces={true}
     >
       {/* Header avec bouton retour */}
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: theme.border, backgroundColor: theme.background }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={darkColor} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Détails du lieu</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Détails du lieu</Text>
         <View style={styles.backButton} />
       </View>
 
@@ -158,12 +162,12 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
       {place.googlePhotoUrl ? (
         <Image
           source={{ uri: place.googlePhotoUrl }}
-          style={styles.mainImage}
+          style={[styles.mainImage, { backgroundColor: theme.surface }]}
           resizeMode="cover"
         />
       ) : (
-        <View style={styles.imagePlaceholder}>
-          <Ionicons name="location" size={48} color="#999" />
+        <View style={[styles.imagePlaceholder, { backgroundColor: theme.surface }]}>
+          <Ionicons name="location" size={48} color={theme.icon} />
         </View>
       )}
 
@@ -171,19 +175,19 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
       <View style={styles.content}>
         {/* Nom et note */}
         <View style={styles.titleSection}>
-          <Text style={styles.name}>{displayName}</Text>
+          <Text style={[styles.name, { color: theme.text }]}>{displayName}</Text>
           {/* Sous-catégorie (type) */}
           {place.type && (
             <View style={styles.typeContainer}>
-              <Text style={styles.typeText}>{place.type}</Text>
+              <Text style={[styles.typeText, { backgroundColor: theme.background, color: theme.text }]}>{place.type}</Text>
             </View>
           )}
           {rating && (
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={18} color="#FFD700" />
-              <Text style={styles.rating}>{rating.toFixed(1)}</Text>
+              <Text style={[styles.rating, { color: theme.text }]}>{rating.toFixed(1)}</Text>
               {userRatingsTotal != null && (
-                <Text style={styles.ratingCount}>({userRatingsTotal})</Text>
+                <Text style={[styles.ratingCount, { color: theme.icon }]}>({userRatingsTotal})</Text>
               )}
             </View>
           )}
@@ -203,8 +207,8 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
         </View>
 
         {/* Note personnelle */}
-        <View style={styles.personalRatingSection}>
-          <Text style={styles.personalRatingLabel}>Ma note</Text>
+        <View style={[styles.personalRatingSection, { borderTopColor: theme.border, borderBottomColor: theme.border }]}>
+          <Text style={[styles.personalRatingLabel, { color: theme.icon }]}>Ma note</Text>
           <PersonalRatingStars
             rating={userRating}
             onRatingPress={handleRatingPress}
@@ -234,7 +238,7 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
           actionIcon="map-outline"
           onActionPress={place.lat && place.lon ? handleOpenMap : undefined}
         >
-          <Text style={styles.address}>{displayAddress}</Text>
+          <Text style={[styles.address, { color: theme.icon }]}>{displayAddress}</Text>
         </PlaceInfoSection>
 
         {/* Téléphone */}
@@ -267,38 +271,38 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
         {place.notes && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="document-text-outline" size={20} color="#666" />
-              <Text style={styles.sectionTitle}>Notes</Text>
+              <Ionicons name="document-text-outline" size={20} color={theme.icon} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Notes</Text>
             </View>
-            <Text style={styles.notes}>{place.notes}</Text>
+            <Text style={[styles.notes, { color: theme.icon }]}>{place.notes}</Text>
           </View>
         )}
 
         {/* Informations supplémentaires */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="information-circle-outline" size={20} color="#666" />
-            <Text style={styles.sectionTitle}>Informations</Text>
+            <Ionicons name="information-circle-outline" size={20} color={theme.icon} />
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Informations</Text>
           </View>
           
           {place.city && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Ville:</Text>
-              <Text style={styles.infoValue}>{place.city}</Text>
+              <Text style={[styles.infoLabel, { color: theme.icon }]}>Ville:</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{place.city}</Text>
             </View>
           )}
           
           {place.country && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Pays:</Text>
-              <Text style={styles.infoValue}>{place.country}</Text>
+              <Text style={[styles.infoLabel, { color: theme.icon }]}>Pays:</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{place.country}</Text>
             </View>
           )}
 
           {place.postcode && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Code postal:</Text>
-              <Text style={styles.infoValue}>{place.postcode}</Text>
+              <Text style={[styles.infoLabel, { color: theme.icon }]}>Code postal:</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{place.postcode}</Text>
             </View>
           )}
 
@@ -307,7 +311,7 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
         {/* Vidéos associées */}
         {place.videos && place.videos.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Vidéos ({place.videos.length})</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Vidéos ({place.videos.length})</Text>
             {place.videos.map((video, index) => {
               const handleOpenVideo = () => {
                 const validateUrl = (url: string): boolean => {
@@ -330,7 +334,7 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
                 <TouchableOpacity
                   key={video.id}
                   onPress={handleOpenVideo}
-                  style={styles.videoItem}
+                  style={[styles.videoItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
                   activeOpacity={0.7}
                 >
                   <View style={[styles.badge, video.provider === 'tiktok' ? styles.badgeTikTok : styles.badgeInstagram]}>
@@ -344,11 +348,11 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
                     </Text>
                   </View>
                   {video.rawTitle && (
-                    <Text style={styles.videoTitle} numberOfLines={2}>
+                    <Text style={[styles.videoTitle, { color: theme.text }]} numberOfLines={2}>
                       {video.rawTitle}
                     </Text>
                   )}
-                  <Ionicons name="chevron-forward" size={20} color="#999" />
+                  <Ionicons name="chevron-forward" size={20} color={theme.border} />
                 </TouchableOpacity>
               );
             })}
@@ -358,7 +362,7 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
         {/* Liens */}
         {place.websiteUrl && (
           <View style={styles.section}>
-            <TouchableOpacity onPress={handleOpenWebsite} style={styles.linkButton}>
+            <TouchableOpacity onPress={handleOpenWebsite} style={[styles.linkButton, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Ionicons name="globe-outline" size={20} color="#007AFF" />
               <Text style={styles.linkButtonText}>Visiter le site web</Text>
               <Ionicons name="chevron-forward" size={20} color="#007AFF" />
@@ -373,7 +377,6 @@ export default function PlaceDetails({ place, onBack, scrollViewRef, onRatingUpd
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   contentContainer: {
     flexGrow: 1,
@@ -386,7 +389,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   backButton: {
     width: 40,
@@ -402,12 +404,10 @@ const styles = StyleSheet.create({
   mainImage: {
     width: '100%',
     height: 250,
-    backgroundColor: '#F5F5F5',
   },
   imagePlaceholder: {
     width: '100%',
     height: 250,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -420,7 +420,6 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 24,
     fontWeight: '700',
-    color: darkColor,
     marginBottom: 8,
   },
   typeContainer: {
@@ -430,8 +429,6 @@ const styles = StyleSheet.create({
   typeText: {
     fontSize: 14,
     fontWeight: '600',
-    color: darkColor,
-    backgroundColor: '#F0F0F0',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -445,11 +442,9 @@ const styles = StyleSheet.create({
   rating: {
     fontSize: 16,
     fontWeight: '600',
-    color: darkColor,
   },
   ratingCount: {
     fontSize: 12,
-    color: '#666',
   },
   openNowBadge: {
     flexDirection: 'row',
@@ -489,13 +484,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   personalRatingLabel: {
     fontSize: 13,
-    color: '#666',
     fontWeight: '500',
   },
   personalRatingContainer: {
@@ -505,7 +497,6 @@ const styles = StyleSheet.create({
   },
   address: {
     fontSize: 14,
-    color: '#666',
     lineHeight: 20,
     marginBottom: 12,
   },
@@ -518,7 +509,6 @@ const styles = StyleSheet.create({
   },
   notes: {
     fontSize: 14,
-    color: '#666',
     lineHeight: 20,
     fontStyle: 'italic',
   },
@@ -531,12 +521,10 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
     minWidth: 100,
   },
   infoValue: {
     fontSize: 14,
-    color: darkColor,
     flex: 1,
   },
   badge: {
@@ -558,15 +546,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#F9F9F9',
     borderRadius: 8,
     marginBottom: 8,
     gap: 12,
+    borderWidth: 1,
   },
   videoTitle: {
     flex: 1,
     fontSize: 14,
-    color: darkColor,
     marginLeft: 8,
   },
   badgeText: {
@@ -590,10 +577,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     padding: 16,
-    backgroundColor: '#F5F5F5',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   linkButtonText: {
     flex: 1,

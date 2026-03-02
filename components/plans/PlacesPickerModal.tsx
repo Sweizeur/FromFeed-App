@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Text, FlatList, TouchableOpacity, Dimensions, TouchableWithoutFeedback, TextInput } from 'react-native';
+import { View, StyleSheet, Text, FlatList, TouchableOpacity, Dimensions, TouchableWithoutFeedback, TextInput, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
-import { darkColor, darkColorWithAlpha } from '@/constants/theme';
+import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 import { type PlaceSummary } from '@/lib/api';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -27,6 +27,9 @@ export default function PlacesPickerModal({
   multiSelect = false,
   onMultiSelect,
 }: PlacesPickerModalProps) {
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const [searchQuery, setSearchQuery] = useState('');
   const [shouldRender, setShouldRender] = useState(false);
   const [selectedPlaces, setSelectedPlaces] = useState<Set<string>>(new Set());
@@ -104,30 +107,30 @@ export default function PlacesPickerModal({
       <TouchableWithoutFeedback onPress={onClose}>
         <Animated.View style={[styles.backdrop, backdropAnimatedStyle]} />
       </TouchableWithoutFeedback>
-      <Animated.View style={[styles.modal, modalAnimatedStyle]}>
-        <View style={styles.modalHeader}>
+      <Animated.View style={[styles.modal, { backgroundColor: theme.surface }, modalAnimatedStyle]}>
+        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
           <View style={styles.modalHeaderLeft}>
-            <Text style={styles.modalTitle}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
               {multiSelect ? 'Sélectionner des lieux' : 'Sélectionner un lieu'}
             </Text>
             {multiSelect && selectedPlaces.size > 0 && (
-              <Text style={styles.modalSubtitle}>
+              <Text style={[styles.modalSubtitle, { color: theme.icon }]}>
                 {selectedPlaces.size} sélectionné{selectedPlaces.size > 1 ? 's' : ''}
               </Text>
             )}
           </View>
           <TouchableOpacity onPress={onClose}>
-            <Ionicons name="close" size={24} color={darkColor} />
+            <Ionicons name="close" size={24} color={theme.text} />
           </TouchableOpacity>
         </View>
         
         {/* Barre de recherche */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+        <View style={[styles.searchContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <Ionicons name="search" size={20} color={theme.icon} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: theme.text }]}
             placeholder="Rechercher un lieu..."
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.icon}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
@@ -135,7 +138,7 @@ export default function PlacesPickerModal({
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color="#999" />
+              <Ionicons name="close-circle" size={20} color={theme.icon} />
             </TouchableOpacity>
           )}
         </View>
@@ -147,7 +150,12 @@ export default function PlacesPickerModal({
             const isSelected = multiSelect && selectedPlaces.has(item.id);
             return (
               <TouchableOpacity
-                style={[styles.placeItem, isSelected && styles.placeItemSelected]}
+                style={[
+                  styles.placeItem,
+                  { borderBottomColor: theme.border },
+                  isSelected && styles.placeItemSelected,
+                  isSelected && { backgroundColor: theme.background },
+                ]}
                 onPress={() => {
                   if (multiSelect) {
                     togglePlaceSelection(item.id);
@@ -157,16 +165,16 @@ export default function PlacesPickerModal({
                 }}
               >
                 {multiSelect && (
-                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                  <View style={[styles.checkbox, { borderColor: theme.icon }, isSelected && styles.checkboxSelected]}>
                     {isSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
                   </View>
                 )}
                 <View style={styles.placeItemContent}>
-                  <Text style={styles.placeItemName} numberOfLines={1}>
+                  <Text style={[styles.placeItemName, { color: theme.text }]} numberOfLines={1}>
                     {item.placeName || item.rawTitle || 'Lieu sans nom'}
                   </Text>
                   {item.googleFormattedAddress && (
-                    <Text style={styles.placeItemAddress} numberOfLines={1}>
+                    <Text style={[styles.placeItemAddress, { color: theme.icon }]} numberOfLines={1}>
                       {item.googleFormattedAddress}
                     </Text>
                   )}
@@ -175,7 +183,7 @@ export default function PlacesPickerModal({
             );
           }}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: theme.icon }]}>
               {searchQuery.trim() 
                 ? 'Aucun lieu ne correspond à votre recherche.'
                 : 'Aucun lieu disponible. Ajoutez d\'abord des lieux depuis l\'onglet Home.'}
@@ -183,7 +191,7 @@ export default function PlacesPickerModal({
           }
           ListFooterComponent={
             multiSelect && selectedPlaces.size > 0 ? (
-              <View style={styles.footer}>
+              <View style={[styles.footer, { borderTopColor: theme.border, backgroundColor: theme.surface }]}>
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={handleAddSelected}
@@ -213,7 +221,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     height: MODAL_HEIGHT,
@@ -230,7 +237,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   modalHeaderLeft: {
     flex: 1,
@@ -248,13 +254,13 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
     borderRadius: 10,
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 8,
     paddingHorizontal: 12,
     height: 44,
+    borderWidth: 1,
   },
   searchIcon: {
     marginRight: 8,
@@ -262,7 +268,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: darkColor,
     padding: 0,
   },
   clearButton: {
@@ -274,7 +279,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   placeItemSelected: {
     backgroundColor: '#F0F8FF',
@@ -299,24 +303,19 @@ const styles = StyleSheet.create({
   placeItemName: {
     fontSize: 16,
     fontWeight: '400',
-    color: darkColor,
     marginBottom: 4,
   },
   placeItemAddress: {
     fontSize: 14,
-    color: '#666',
   },
   emptyText: {
     fontSize: 14,
-    color: '#999',
     textAlign: 'center',
     padding: 32,
   },
   footer: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#EFEFEF',
-    backgroundColor: '#fff',
   },
   addButton: {
     backgroundColor: darkColor,

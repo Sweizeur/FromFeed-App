@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, StyleSheet, TextInput, TouchableOpacity, Text, LayoutChangeEvent, Keyboard } from 'react-native';
+import { View, StyleSheet, TextInput, TouchableOpacity, Text, LayoutChangeEvent, Keyboard, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PlaceFilters from '../places/PlaceFilters';
 import { PlaceSummary } from '@/types/api';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 import AnimatedAIButton from '../common/AnimatedAIButton';
 
 interface MapHeaderProps {
@@ -59,6 +59,9 @@ export default function MapHeader({
   onSearchSubmit,
 }: MapHeaderProps) {
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   
   // Vérifier s'il y a des places avec des catégories pour afficher les filtres (ou toujours sur feed)
   const hasCategories = places.length > 0 && places.some(place => place.category === 'Restauration' || place.category === 'Activité');
@@ -67,37 +70,37 @@ export default function MapHeader({
   return (
     <View style={[styles.headerContainer, (showBackButton || onlyFilters) && { paddingTop: insets.top }]} onLayout={onLayout}>
       {!onlyFilters && (
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.background }]}>
           {/* Titre et bouton retour si nécessaire */}
           {showBackButton && (
-            <View style={styles.titleBar}>
+            <View style={[styles.titleBar, { borderBottomColor: theme.border }]}>
               <TouchableOpacity
                 style={styles.backButton}
                 onPress={onBackPress}
                 activeOpacity={0.7}
               >
-                <Ionicons name="arrow-back" size={24} color={darkColor} />
+                <Ionicons name="arrow-back" size={24} color={theme.text} />
               </TouchableOpacity>
               {title && (
-                <Text style={styles.title} numberOfLines={1}>
+                <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
                   {title}
                 </Text>
               )}
             </View>
           )}
-          <View style={styles.searchBar}>
+          <View style={[styles.searchBar, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             {/* Zone input recherche */}
             <View style={styles.searchInputWrapper}>
               <Ionicons
                 name="search"
                 size={20}
-                color="#A0A0A0"
+                color={theme.icon}
                 style={styles.searchIcon}
               />
               <TextInput
                 placeholder={searchPlaceholder}
-                placeholderTextColor="#B0B0B0"
-                style={styles.searchInput}
+                placeholderTextColor={theme.icon}
+                style={[styles.searchInput, { color: theme.text }]}
                 value={onSearchChangeText != null ? searchValue ?? '' : undefined}
                 onChangeText={onSearchChangeText}
                 onSubmitEditing={onSearchSubmit}
@@ -109,8 +112,12 @@ export default function MapHeader({
             {/* Boutons à droite */}
             <View style={styles.searchActions}>
               {!hideNotificationButton && (
-                <TouchableOpacity activeOpacity={0.7} onPress={() => {}} style={styles.circleButtonLight}>
-                  <Ionicons name="notifications-outline" size={18} color={darkColor} />
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {}}
+                  style={[styles.circleButtonLight, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                >
+                  <Ionicons name="notifications-outline" size={18} color={theme.text} />
                 </TouchableOpacity>
               )}
               {onAIPress && !hideAIButton && (
@@ -130,7 +137,7 @@ export default function MapHeader({
         </View>
       )}
       {shouldShowFilters && (
-        <View style={[styles.subHeader, onlyFilters && styles.subHeaderOnlyFilters]}>
+        <View style={[styles.subHeader, { backgroundColor: theme.background }, onlyFilters && styles.subHeaderOnlyFilters]}>
           <PlaceFilters
             places={places}
             selectedCategory={selectedCategory}
@@ -146,6 +153,9 @@ export default function MapHeader({
 
 // Composant séparé pour la popup upgrade (superposée sur la map)
 export function UpgradePopup() {
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   return (
     <View style={upgradePopupStyles.container}>
       <View style={upgradePopupStyles.content}>
@@ -153,8 +163,11 @@ export function UpgradePopup() {
           1/5 saves used on the FromFeed free plan {'\n'}
           <Text style={{ fontWeight: 'bold' }}>Upgrade</Text> now for unlimited saves
         </Text>
-        <TouchableOpacity style={upgradePopupStyles.button} onPress={() => {}}>
-          <Text style={upgradePopupStyles.buttonText}>Upgrade</Text>
+        <TouchableOpacity
+          style={[upgradePopupStyles.button, { backgroundColor: theme.surface, borderColor: theme.border }]}
+          onPress={() => {}}
+        >
+          <Text style={[upgradePopupStyles.buttonText, { color: theme.text }]}>Upgrade</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -171,7 +184,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   backButton: {
     marginRight: 12,
@@ -179,19 +191,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: darkColor,
     flex: 1,
   },
   header: {
     height: 120,
-    backgroundColor: '#fff',
     justifyContent: 'flex-end',
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
   subHeader: {
     height: 52,
-    backgroundColor: '#fff',
     justifyContent: 'center',
   },
   subHeaderOnlyFilters: {
@@ -201,12 +210,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 46, // hauteur fixe = AnimatedAIButton 38px + paddingVertical 8 (identique avec ou sans boutons)
-    backgroundColor: '#fff',
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: '#EFEFEF',
     shadowColor: darkColor,
     shadowOpacity: 0.04,
     shadowOffset: { width: 0, height: 2 },
@@ -224,7 +231,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#555',
   },
   searchActions: {
     flexDirection: 'row',
@@ -236,7 +242,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F3F3F3',
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -280,13 +286,12 @@ const upgradePopupStyles = StyleSheet.create({
     flex: 1,
   },
   button: {
-    backgroundColor: '#fff',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
+    borderWidth: 1,
   },
   buttonText: {
-    color: darkColor,
     fontSize: 14,
     fontWeight: '600',
   },

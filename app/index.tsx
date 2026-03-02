@@ -10,11 +10,12 @@ import {
   Alert,
   KeyboardAvoidingView,
   ScrollView,
+  useColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { getStoredToken, getStoredUser, refreshSession } from '@/lib/auth-mobile';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 // Logo Google officiel (G multicolore)
 function GoogleLogo() {
@@ -56,6 +57,9 @@ export default function SignUpScreen() {
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   const router = useRouter();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
 
   // Vérifier si l'utilisateur est déjà connecté au démarrage
   useEffect(() => {
@@ -152,15 +156,15 @@ export default function SignUpScreen() {
   // Afficher un indicateur de chargement pendant la vérification de l'authentification
   if (checkingAuth) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={darkColor} />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.text} />
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
@@ -169,20 +173,20 @@ export default function SignUpScreen() {
       >
         <View style={styles.content}>
           {/* Titre */}
-          <Text style={styles.title}>Let's create your FromFeed account.</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Let's create your FromFeed account.</Text>
 
           {/* Input téléphone */}
           <View style={styles.phoneContainer}>
-            <Text style={styles.phoneLabel}>Phone Number</Text>
+            <Text style={[styles.phoneLabel, { color: theme.text }]}>Phone Number</Text>
             <View style={styles.phoneInputContainer}>
               <TouchableOpacity style={styles.countryCodeButton}>
                 <Text style={styles.countryCodeText}>{countryCode}</Text>
                 <Text style={styles.arrow}>▼</Text>
               </TouchableOpacity>
               <TextInput
-                style={styles.phoneInput}
+                style={[styles.phoneInput, { backgroundColor: theme.surface, color: theme.text }]}
                 placeholder="Enter phone number"
-                placeholderTextColor="#999"
+                placeholderTextColor={theme.icon}
                 value={phoneNumber}
                 onChangeText={setPhoneNumber}
                 keyboardType="phone-pad"
@@ -199,7 +203,7 @@ export default function SignUpScreen() {
           </View>
 
           {/* Texte légal */}
-          <Text style={styles.legalText}>
+          <Text style={[styles.legalText, { color: theme.icon }]}>
             By creating an account, you agree to our{' '}
             <Text style={styles.linkText}>Terms & Conditions</Text> and{' '}
             <Text style={styles.linkText}>Privacy Policy</Text>. You also agree to receive recurring text messages at the phone number provided - Msg & data rates may apply. Msg frequency varies. Reply STOP to cancel.
@@ -207,9 +211,9 @@ export default function SignUpScreen() {
 
           {/* Séparateur */}
           <View style={styles.separator}>
-            <View style={styles.separatorLine} />
-            <Text style={styles.separatorText}>OR</Text>
-            <View style={styles.separatorLine} />
+            <View style={[styles.separatorLine, { backgroundColor: theme.border }]} />
+            <Text style={[styles.separatorText, { color: theme.icon }]}>OR</Text>
+            <View style={[styles.separatorLine, { backgroundColor: theme.border }]} />
           </View>
 
           {/* Boutons sociaux */}
@@ -245,13 +249,11 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
   },
   scrollContent: {
     flexGrow: 1,
@@ -264,7 +266,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: darkColor,
     marginBottom: 40,
     fontFamily: Platform.select({
       ios: 'System',
@@ -277,7 +278,6 @@ const styles = StyleSheet.create({
   phoneLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: darkColor,
     marginBottom: 12,
   },
   phoneInputContainer: {
@@ -305,12 +305,10 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 12,
     fontSize: 16,
-    color: darkColor,
   },
   nextButton: {
     width: 48,
@@ -327,7 +325,6 @@ const styles = StyleSheet.create({
   },
   legalText: {
     fontSize: 12,
-    color: '#666',
     lineHeight: 18,
     marginBottom: 32,
   },
@@ -344,11 +341,9 @@ const styles = StyleSheet.create({
   separatorLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#e0e0e0',
   },
   separatorText: {
     fontSize: 14,
-    color: '#666',
     fontWeight: '500',
   },
   socialButton: {

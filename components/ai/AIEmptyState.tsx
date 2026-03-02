@@ -21,9 +21,7 @@ interface AIEmptyStateProps {
   colorScheme?: 'light' | 'dark';
 }
 
-const surfaceColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#2C2E30' : '#FAFAFA');
-const borderColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : '#F0F0F0');
-const mutedColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#9BA1A6' : '#666');
+const mutedColor = (scheme: 'light' | 'dark') => Colors[scheme].icon;
 
 export default function AIEmptyState({
   prompt,
@@ -37,10 +35,11 @@ export default function AIEmptyState({
   colorScheme = 'light',
 }: AIEmptyStateProps) {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const textColor = colorScheme === 'dark' ? Colors.dark.text : Colors.light.text;
+  const theme = Colors[colorScheme];
+  const textColor = theme.text;
   const muted = mutedColor(colorScheme);
-  const surface = surfaceColor(colorScheme);
-  const border = borderColor(colorScheme);
+  const surface = theme.surface;
+  const border = theme.border;
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';

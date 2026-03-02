@@ -20,10 +20,10 @@ interface AIInputProps {
   colorScheme?: 'light' | 'dark';
 }
 
-const surfaceColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#2C2E30' : '#F5F5F5');
-const borderColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : '#E5E5E5');
-const mutedColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#9BA1A6' : '#666');
-const inputBgColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? Colors.dark.background : '#fff');
+const surfaceColor = (scheme: 'light' | 'dark') => Colors[scheme].surface;
+const borderColor = (scheme: 'light' | 'dark') => Colors[scheme].border;
+const mutedColor = (scheme: 'light' | 'dark') => Colors[scheme].icon;
+const inputBgColor = (scheme: 'light' | 'dark') => Colors[scheme].surface;
 // En dark mode fond gris lisible pour que la flèche blanche reste visible (sans bleu)
 const sendTint = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : darkColor);
 

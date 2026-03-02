@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     left: '50%',
     width: '100%',
     height: 8,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,1)',
     opacity: 0.3,
     borderRadius: 4,
   },

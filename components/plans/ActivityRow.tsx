@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Platform, Modal } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Platform, Modal, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { type PlaceSummary } from '@/lib/api';
-import { darkColor, darkColorWithAlpha } from '@/constants/theme';
+import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 
 // Import du DateTimePicker
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -23,6 +23,9 @@ interface ActivityRowProps {
 }
 
 export default function ActivityRow({ activity, onTimeChange, onRemove }: ActivityRowProps) {
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const [showPicker, setShowPicker] = useState(false);
   const [isEndTimePicker, setIsEndTimePicker] = useState(false);
   
@@ -100,20 +103,20 @@ export default function ActivityRow({ activity, onTimeChange, onRemove }: Activi
   };
 
   return (
-    <View style={styles.activityRow}>
+    <View style={[styles.activityRow, { borderBottomColor: theme.border }]}>
       <View style={styles.activityContent}>
-        <Text style={styles.activityName} numberOfLines={1}>
+        <Text style={[styles.activityName, { color: theme.text }]} numberOfLines={1}>
           {activity.place?.placeName || activity.place?.rawTitle || 'Lieu sans nom'}
         </Text>
         {activity.place?.googleFormattedAddress && (
-          <Text style={styles.activityAddress} numberOfLines={1}>
+          <Text style={[styles.activityAddress, { color: theme.icon }]} numberOfLines={1}>
             {activity.place.googleFormattedAddress}
           </Text>
         )}
       </View>
       <View style={styles.timeButtonContainer}>
-        <TouchableOpacity onPress={() => openPicker(false)} style={styles.timeButton}>
-          <Text style={styles.timeText}>{formatTime(activity.startTime)}</Text>
+        <TouchableOpacity onPress={() => openPicker(false)} style={[styles.timeButton, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <Text style={[styles.timeText, { color: theme.text }]}>{formatTime(activity.startTime)}</Text>
         </TouchableOpacity>
         {activity.startTime && (
           <TouchableOpacity 
@@ -121,11 +124,11 @@ export default function ActivityRow({ activity, onTimeChange, onRemove }: Activi
             style={styles.removeTimeIconButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="close-circle" size={16} color="#999" />
+            <Ionicons name="close-circle" size={16} color={theme.icon} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={() => openPicker(true)} style={styles.timeButton}>
-          <Text style={styles.timeText}>{formatTime(activity.endTime)}</Text>
+        <TouchableOpacity onPress={() => openPicker(true)} style={[styles.timeButton, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <Text style={[styles.timeText, { color: theme.text }]}>{formatTime(activity.endTime)}</Text>
         </TouchableOpacity>
         {activity.endTime && (
           <TouchableOpacity 
@@ -133,7 +136,7 @@ export default function ActivityRow({ activity, onTimeChange, onRemove }: Activi
             style={styles.removeTimeIconButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="close-circle" size={16} color="#999" />
+            <Ionicons name="close-circle" size={16} color={theme.icon} />
           </TouchableOpacity>
         )}
       </View>
@@ -156,16 +159,16 @@ export default function ActivityRow({ activity, onTimeChange, onRemove }: Activi
           onRequestClose={handleCancel}
         >
           <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-                  <Ionicons name="close" size={24} color={darkColor} />
+            <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+                <TouchableOpacity onPress={handleCancel} style={[styles.headerButton, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                  <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
-                <Text style={styles.modalTitle}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
                   {isEndTimePicker ? "Sélectionner l'heure de fin" : "Sélectionner l'heure de début"}
                 </Text>
-                <TouchableOpacity onPress={handleConfirm} style={styles.headerButton}>
-                  <Ionicons name="checkmark" size={24} color={darkColor} />
+                <TouchableOpacity onPress={handleConfirm} style={[styles.headerButton, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                  <Ionicons name="checkmark" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
               <View style={styles.pickerContainer}>
@@ -202,7 +205,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
     gap: 12,
   },
   activityContent: {
@@ -211,12 +213,10 @@ const styles = StyleSheet.create({
   activityName: {
     fontSize: 16,
     fontWeight: '400',
-    color: darkColor,
     marginBottom: 4,
   },
   activityAddress: {
     fontSize: 14,
-    color: '#666',
   },
   timeButtonContainer: {
     flexDirection: 'row',
@@ -226,15 +226,14 @@ const styles = StyleSheet.create({
   timeButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#F5F5F5',
     borderRadius: 8,
+    borderWidth: 1,
   },
   removeTimeIconButton: {
     padding: 2,
   },
   timeText: {
     fontSize: 14,
-    color: darkColor,
     fontWeight: '500',
   },
   removeButton: {
@@ -246,7 +245,6 @@ const styles = StyleSheet.create({
     backgroundColor: darkColorWithAlpha(0.5),
   },
   modalContent: {
-    backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 20,
@@ -259,13 +257,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
     gap: 12,
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: darkColor,
     flex: 1,
     textAlign: 'center',
   },
@@ -273,9 +269,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   pickerContainer: {
     width: '100%',

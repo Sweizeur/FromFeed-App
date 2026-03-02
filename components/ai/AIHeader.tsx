@@ -13,10 +13,6 @@ interface AIHeaderProps {
   colorScheme?: 'light' | 'dark';
 }
 
-const iconColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? Colors.dark.text : Colors.light.text);
-const surfaceColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#2C2E30' : '#F5F5F5');
-const borderColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : '#EFEFEF');
-
 export default function AIHeader({
   conversationTitle,
   titleAnimatedStyle,
@@ -25,13 +21,23 @@ export default function AIHeader({
   onNewMessage,
   colorScheme = 'light',
 }: AIHeaderProps) {
-  const icon = iconColor(colorScheme);
-  const surface = surfaceColor(colorScheme);
-  const border = borderColor(colorScheme);
-  const textColor = colorScheme === 'dark' ? Colors.dark.text : Colors.light.text;
+  const theme = Colors[colorScheme];
+  const icon = theme.text;
+  const surface = theme.surface;
+  const border = theme.border;
+  const textColor = theme.text;
 
   return (
-    <View style={[styles.header, { borderBottomColor: border }]}>
+    <View
+      style={[
+        styles.header,
+        {
+          backgroundColor: theme.background,
+          borderBottomColor: border,
+          shadowOpacity: colorScheme === 'dark' ? 0 : 0.06,
+        },
+      ]}
+    >
       <View style={styles.headerLeft}>
         <Animated.Text 
           style={[styles.headerTitle, titleAnimatedStyle, { color: textColor }]}
@@ -44,7 +50,7 @@ export default function AIHeader({
       <View style={styles.headerRight}>
         <TouchableOpacity
           onPress={onShowConversations}
-          style={[styles.conversationsButton, { backgroundColor: surface }]}
+          style={[styles.conversationsButton, { backgroundColor: surface, borderColor: border }]}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="time-outline" size={22} color={icon} />
@@ -52,7 +58,7 @@ export default function AIHeader({
         {hasMessages && (
           <TouchableOpacity
             onPress={onNewMessage}
-            style={[styles.newMessageButton, { backgroundColor: surface }]}
+            style={[styles.newMessageButton, { backgroundColor: surface, borderColor: border }]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="add" size={22} color={icon} />
@@ -72,6 +78,10 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 20,
     borderBottomWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 3,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -97,6 +107,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   newMessageButton: {
     width: 32,
@@ -104,6 +115,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
 });
 

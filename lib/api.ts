@@ -909,6 +909,15 @@ export async function deleteCollection(collectionId: string): Promise<{ message:
 }
 
 /**
+ * Duplique une collection
+ */
+export async function duplicateCollection(collectionId: string): Promise<any> {
+  return apiRequest(`/api/collections/${collectionId}/duplicate`, {
+    method: 'POST',
+  });
+}
+
+/**
  * Ajoute un lieu à une collection
  */
 export async function addPlaceToCollection(collectionId: string, placeId: string): Promise<{ message: string } | null> {
@@ -924,6 +933,20 @@ export async function addPlaceToCollection(collectionId: string, placeId: string
 export async function removePlaceFromCollection(collectionId: string, placeId: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/collections/${collectionId}/places/${placeId}`, {
     method: 'DELETE',
+  });
+}
+
+/**
+ * Ajouter/retirer plusieurs lieux d'une collection en une seule requête
+ */
+export async function batchUpdateCollectionPlaces(
+  collectionId: string,
+  addPlaceIds: string[],
+  removePlaceIds: string[],
+): Promise<{ message: string; added: number; removed: number } | null> {
+  return apiRequest(`/api/collections/${collectionId}/places/batch`, {
+    method: 'PUT',
+    body: JSON.stringify({ addPlaceIds, removePlaceIds }),
   });
 }
 
@@ -954,6 +977,97 @@ export async function getPlaceCollections(placeId: string): Promise<{
 } | null> {
   return apiRequest(`/api/collections/places/${placeId}`, {
     method: 'GET',
+  });
+}
+
+// ============ USERS ============
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  username: string | null;
+  image: string | null;
+  createdAt: string;
+}
+
+export interface UserSearchResult {
+  id: string;
+  name: string;
+  username: string | null;
+  image: string | null;
+}
+
+export async function getMyProfile(): Promise<UserProfile | null> {
+  return apiRequest('/api/users/me');
+}
+
+export async function updateMyUsername(username: string): Promise<{ username: string } | null> {
+  return apiRequest('/api/users/me/username', {
+    method: 'PUT',
+    body: JSON.stringify({ username }),
+  });
+}
+
+export async function searchUsers(query: string): Promise<UserSearchResult[] | null> {
+  return apiRequest(`/api/users/search?q=${encodeURIComponent(query)}`);
+}
+
+// ============ FRIENDS ============
+
+export interface Friend {
+  id: string;
+  name: string;
+  username: string | null;
+  image: string | null;
+}
+
+export interface FriendRequest {
+  id: string;
+  from: Friend;
+  createdAt: string;
+}
+
+export interface SentRequest {
+  id: string;
+  to: Friend;
+  createdAt: string;
+}
+
+export async function getFriends(): Promise<Friend[] | null> {
+  return apiRequest('/api/friends');
+}
+
+export async function getFriendRequests(): Promise<FriendRequest[] | null> {
+  return apiRequest('/api/friends/requests');
+}
+
+export async function getSentRequests(): Promise<SentRequest[] | null> {
+  return apiRequest('/api/friends/sent');
+}
+
+export async function sendFriendRequest(friendId: string): Promise<any> {
+  return apiRequest('/api/friends/request', {
+    method: 'POST',
+    body: JSON.stringify({ friendId }),
+  });
+}
+
+export async function acceptFriendRequest(requestId: string): Promise<any> {
+  return apiRequest(`/api/friends/${requestId}/accept`, {
+    method: 'PUT',
+  });
+}
+
+export async function rejectFriendRequest(requestId: string): Promise<any> {
+  return apiRequest(`/api/friends/${requestId}/reject`, {
+    method: 'PUT',
+  });
+}
+
+export async function removeFriend(friendId: string): Promise<any> {
+  return apiRequest(`/api/friends/${friendId}`, {
+    method: 'DELETE',
   });
 }
 

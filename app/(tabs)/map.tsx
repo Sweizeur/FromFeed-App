@@ -36,6 +36,7 @@ import { matchesTypeFilter } from '@/utils/typeHierarchy';
 import { darkColor, Colors } from '@/constants/theme';
 import GlassButton from '@/components/ui/GlassButton';
 import MapTabHeader from '@/components/navigation/MapTabHeader';
+import { router } from 'expo-router';
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
@@ -319,10 +320,11 @@ export default function MapScreen() {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
         <MapTabHeader
           placesCount={filteredPlaces.length}
           onAddPress={() => setIsLinkModalVisible(true)}
+          onPlacesPress={() => router.navigate('/places')}
         />
         <View style={styles.mapContainer}>
             {loadingLocation && (
@@ -367,7 +369,16 @@ export default function MapScreen() {
                       onPress={() => handlePlacePress(place)}
                       tracksViewChanges={false}
                     >
-                      <View style={markerStyles.emojiBox}>
+                    <View
+                      style={[
+                        markerStyles.emojiBox,
+                        {
+                          backgroundColor: theme.surface,
+                          borderColor: theme.border,
+                          shadowColor: isDark ? '#000' : '#000',
+                        },
+                      ]}
+                    >
                         <Text style={markerStyles.emoji}>
                           {place.markerEmoji ?? DEFAULT_MARKER_EMOJI}
                         </Text>
@@ -429,7 +440,7 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
   mapContainer: { flex: 1, position: 'relative', width: '100%' },
   mapLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   centerUserButton: {
@@ -461,10 +472,8 @@ const markerStyles = StyleSheet.create({
     height: MARKER_EMOJI_BOX,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     borderRadius: MARKER_EMOJI_BOX / 2,
     borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.15)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,

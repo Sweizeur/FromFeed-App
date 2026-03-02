@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,11 +8,14 @@ import AppBottomNav from '@/components/navigation/AppBottomNav';
 import CollectionCard from '@/components/groups/CollectionCard';
 import { getGroup } from '@/lib/api';
 import type { Group, Collection } from '@/types/groups';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 export default function GroupDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const { id } = useLocalSearchParams<{ id: string }>();
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,9 +38,9 @@ export default function GroupDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={darkColor} />
+          <ActivityIndicator size="large" color={theme.text} />
         </View>
       </SafeAreaView>
     );
@@ -45,14 +48,14 @@ export default function GroupDetailScreen() {
 
   if (!group) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Groupe introuvable</Text>
+          <Text style={[styles.errorText, { color: theme.text }]}>Groupe introuvable</Text>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <Text style={styles.backButtonText}>Retour</Text>
+            <Text style={[styles.backButtonText, { color: theme.text }]}>Retour</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -77,18 +80,18 @@ export default function GroupDetailScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color={darkColor} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>
             {group.name}
           </Text>
         </View>
@@ -97,7 +100,7 @@ export default function GroupDetailScreen() {
           onPress={handleShareGroup}
           activeOpacity={0.7}
         >
-          <Ionicons name="share-outline" size={24} color={darkColor} />
+          <Ionicons name="share-outline" size={24} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -108,38 +111,38 @@ export default function GroupDetailScreen() {
       >
         {/* Description */}
         {group.description && (
-          <View style={styles.descriptionContainer}>
-            <Text style={styles.description}>{group.description}</Text>
+          <View style={[styles.descriptionContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Text style={[styles.description, { color: theme.icon }]}>{group.description}</Text>
           </View>
         )}
 
         {/* Membres */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Membres</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Membres</Text>
             <TouchableOpacity
               onPress={handleManageMembers}
               activeOpacity={0.7}
             >
-              <Text style={styles.sectionAction}>Gérer</Text>
+              <Text style={[styles.sectionAction, { color: theme.text }]}>Gérer</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.membersList}>
             {group.members.map((member) => (
-              <View key={member.id} style={styles.memberItem}>
-                <View style={styles.memberAvatar}>
-                  <Text style={styles.memberAvatarText}>
+              <View key={member.id} style={[styles.memberItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={[styles.memberAvatar, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                  <Text style={[styles.memberAvatarText, { color: theme.text }]}>
                     {member.name.charAt(0).toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>
+                  <Text style={[styles.memberName, { color: theme.text }]}>
                     {member.name}
                     {member.isOwner && (
-                      <Text style={styles.ownerBadge}> • Propriétaire</Text>
+                      <Text style={[styles.ownerBadge, { color: theme.icon }]}> • Propriétaire</Text>
                     )}
                   </Text>
-                  <Text style={styles.memberEmail}>{member.email}</Text>
+                  <Text style={[styles.memberEmail, { color: theme.icon }]}>{member.email}</Text>
                 </View>
               </View>
             ))}
@@ -149,15 +152,15 @@ export default function GroupDetailScreen() {
         {/* Collections partagées */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
               Collections partagées ({sharedCollections.length})
             </Text>
           </View>
           {sharedCollections.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="folder-outline" size={48} color="#CCC" />
-              <Text style={styles.emptyStateText}>Aucune collection partagée</Text>
-              <Text style={styles.emptyStateSubtext}>
+              <Ionicons name="folder-outline" size={48} color={theme.border} />
+              <Text style={[styles.emptyStateText, { color: theme.text }]}>Aucune collection partagée</Text>
+              <Text style={[styles.emptyStateSubtext, { color: theme.icon }]}>
                 Les collections partagées avec ce groupe apparaîtront ici
               </Text>
             </View>
@@ -192,7 +195,6 @@ export default function GroupDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
@@ -201,7 +203,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   backButton: {
     marginRight: 12,
@@ -212,7 +213,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: darkColor,
   },
   shareButton: {
     marginLeft: 12,
@@ -227,12 +227,11 @@ const styles = StyleSheet.create({
   descriptionContainer: {
     marginBottom: 24,
     padding: 16,
-    backgroundColor: '#F8F8F8',
+    borderWidth: 1,
     borderRadius: 12,
   },
   description: {
     fontSize: 14,
-    color: '#666',
     lineHeight: 20,
   },
   section: {
@@ -247,12 +246,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: darkColor,
   },
   sectionAction: {
     fontSize: 14,
     fontWeight: '500',
-    color: darkColor,
   },
   membersList: {
     gap: 12,
@@ -261,22 +258,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#F8F8F8',
     borderRadius: 12,
+    borderWidth: 1,
   },
   memberAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#E0E0E0',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    borderWidth: 1,
   },
   memberAvatarText: {
     fontSize: 18,
     fontWeight: '600',
-    color: darkColor,
   },
   memberInfo: {
     flex: 1,
@@ -284,17 +280,14 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 16,
     fontWeight: '600',
-    color: darkColor,
     marginBottom: 4,
   },
   ownerBadge: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#666',
   },
   memberEmail: {
     fontSize: 13,
-    color: '#666',
   },
   emptyState: {
     alignItems: 'center',
@@ -304,13 +297,11 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     fontWeight: '600',
-    color: darkColor,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 13,
-    color: '#666',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
@@ -323,13 +314,11 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 18,
     fontWeight: '600',
-    color: darkColor,
     marginBottom: 20,
   },
   backButtonText: {
     fontSize: 16,
     fontWeight: '500',
-    color: darkColor,
     textDecorationLine: 'underline',
   },
   loadingContainer: {

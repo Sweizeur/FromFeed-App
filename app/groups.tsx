@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +11,7 @@ import CreateGroupModal from '@/components/groups/CreateGroupModal';
 import CreateCollectionModal from '@/components/groups/CreateCollectionModal';
 import { getGroups, getCollections } from '@/lib/api';
 import type { Group, Collection } from '@/types/groups';
-import { darkColor } from '@/constants/theme';
+import { Colors, darkColor } from '@/constants/theme';
 
 interface GroupsScreenProps {
   activeTab?: string;
@@ -21,6 +21,9 @@ interface GroupsScreenProps {
 export default function GroupsScreen({ activeTab: propActiveTab, onTabChange: propOnTabChange }: GroupsScreenProps = {} as GroupsScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   // État interne pour basculer entre "Groupes" et "Collections" dans cet écran
   const [internalSubTab, setInternalSubTab] = useState<'groups' | 'collections'>('groups');
   const [groups, setGroups] = useState<Group[]>([]);
@@ -109,27 +112,47 @@ export default function GroupsScreen({ activeTab: propActiveTab, onTabChange: pr
   );
 
   return (
-    <SafeAreaView style={[styles.container, propActiveTab ? { flex: 1 } : { paddingTop: insets.top, flex: 1 }]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.background },
+        propActiveTab ? { flex: 1 } : { paddingTop: insets.top, flex: 1 },
+      ]}
+    >
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Groupes & Collections</Text>
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
+        <Text style={[styles.title, { color: theme.text }]}>Groupes & Collections</Text>
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabs}>
+      <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
         <TouchableOpacity
-          style={[styles.tab, internalSubTab === 'groups' && styles.tabActive]}
+          style={[styles.tab, internalSubTab === 'groups' && styles.tabActive, internalSubTab === 'groups' && { borderBottomColor: theme.text }]}
           onPress={() => setInternalSubTab('groups')}
         >
-          <Text style={[styles.tabText, internalSubTab === 'groups' && styles.tabTextActive]}>
+          <Text
+            style={[
+              styles.tabText,
+              { color: theme.icon },
+              internalSubTab === 'groups' && styles.tabTextActive,
+              internalSubTab === 'groups' && { color: theme.text },
+            ]}
+          >
             Groupes
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, internalSubTab === 'collections' && styles.tabActive]}
+          style={[styles.tab, internalSubTab === 'collections' && styles.tabActive, internalSubTab === 'collections' && { borderBottomColor: theme.text }]}
           onPress={() => setInternalSubTab('collections')}
         >
-          <Text style={[styles.tabText, internalSubTab === 'collections' && styles.tabTextActive]}>
+          <Text
+            style={[
+              styles.tabText,
+              { color: theme.icon },
+              internalSubTab === 'collections' && styles.tabTextActive,
+              internalSubTab === 'collections' && { color: theme.text },
+            ]}
+          >
             Collections
           </Text>
         </TouchableOpacity>
@@ -138,7 +161,7 @@ export default function GroupsScreen({ activeTab: propActiveTab, onTabChange: pr
       {/* Content */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={darkColor} />
+          <ActivityIndicator size="large" color={theme.text} />
         </View>
       ) : (
         <ScrollView
@@ -163,9 +186,9 @@ export default function GroupsScreen({ activeTab: propActiveTab, onTabChange: pr
               {/* Liste des groupes */}
               {groups.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Ionicons name="people-outline" size={48} color="#CCC" />
-                  <Text style={styles.emptyStateText}>Aucun groupe pour le moment</Text>
-                  <Text style={styles.emptyStateSubtext}>
+                  <Ionicons name="people-outline" size={48} color={theme.border} />
+                  <Text style={[styles.emptyStateText, { color: theme.text }]}>Aucun groupe pour le moment</Text>
+                  <Text style={[styles.emptyStateSubtext, { color: theme.icon }]}>
                     Créez un groupe pour partager vos collections avec vos amis
                   </Text>
                 </View>
@@ -190,9 +213,9 @@ export default function GroupsScreen({ activeTab: propActiveTab, onTabChange: pr
               {/* Liste des collections */}
               {collections.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Ionicons name="folder-outline" size={48} color="#CCC" />
-                  <Text style={styles.emptyStateText}>Aucune collection pour le moment</Text>
-                  <Text style={styles.emptyStateSubtext}>
+                  <Ionicons name="folder-outline" size={48} color={theme.border} />
+                  <Text style={[styles.emptyStateText, { color: theme.text }]}>Aucune collection pour le moment</Text>
+                  <Text style={[styles.emptyStateSubtext, { color: theme.icon }]}>
                     Créez une collection pour organiser vos lieux
                   </Text>
                 </View>
@@ -225,26 +248,22 @@ export default function GroupsScreen({ activeTab: propActiveTab, onTabChange: pr
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: darkColor,
   },
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     paddingTop: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   tab: {
     paddingBottom: 12,
@@ -258,10 +277,8 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#999',
   },
   tabTextActive: {
-    color: darkColor,
     fontWeight: '600',
   },
   scrollView: {
@@ -300,13 +317,11 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 18,
     fontWeight: '600',
-    color: darkColor,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#666',
     textAlign: 'center',
     paddingHorizontal: 40,
   },

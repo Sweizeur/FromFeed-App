@@ -18,16 +18,20 @@ export const darkColorWithAlpha = (alpha: number): string => {
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    text: '#0B1220',
+    background: '#F3F1EC',
+    surface: '#FAF8F2',
+    border: '#E2DED6',
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: '#6B7280',
+    tabIconDefault: '#6B7280',
     tabIconSelected: tintColorLight,
   },
   dark: {
     text: '#ECEDEE',
     background: '#151718',
+    surface: '#1C1D1E',
+    border: '#2C2E30',
     tint: tintColorDark,
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',

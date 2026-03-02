@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  useColorScheme,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
@@ -17,7 +18,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
-import { darkColor, darkColorWithAlpha } from '@/constants/theme';
+import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 
 interface AIModalProps {
   visible: boolean;
@@ -35,6 +36,9 @@ const SUGGESTIONS = [
 const MODAL_HEIGHT = 400;
 
 export default function AIModal({ visible, onClose, onSubmit }: AIModalProps) {
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const translateY = useSharedValue(MODAL_HEIGHT);
@@ -103,10 +107,10 @@ export default function AIModal({ visible, onClose, onSubmit }: AIModalProps) {
           />
         </Animated.View>
 
-        <Animated.View style={[styles.modal, modalAnimatedStyle]}>
-          <View style={styles.header}>
+        <Animated.View style={[styles.modal, { backgroundColor: theme.surface }, modalAnimatedStyle]}>
+          <View style={[styles.header, { borderBottomColor: theme.border }]}>
             <View style={styles.headerLeft}>
-              <View style={styles.iconContainer}>
+              <View style={[styles.iconContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
                 <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
                   <Path
                     d="M14.187 8.096L15 5.25L15.813 8.096C16.0231 8.83114 16.4171 9.50062 16.9577 10.0413C17.4984 10.5819 18.1679 10.9759 18.903 11.186L21.75 12L18.904 12.813C18.1689 13.0231 17.4994 13.4171 16.9587 13.9577C16.4181 14.4984 16.0241 15.1679 15.814 15.903L15 18.75L14.187 15.904C13.9769 15.1689 13.5829 14.4994 13.0423 13.9587C12.5016 13.4181 11.8321 13.0241 11.097 12.814L8.25 12L11.096 11.187C11.8311 10.9769 12.5006 10.5829 13.0413 10.0423C13.5819 9.50162 13.9759 8.83214 14.186 8.097L14.187 8.096Z"
@@ -134,10 +138,10 @@ export default function AIModal({ visible, onClose, onSubmit }: AIModalProps) {
                   />
                 </Svg>
               </View>
-              <Text style={styles.headerTitle}>Assistant IA</Text>
+              <Text style={[styles.headerTitle, { color: theme.text }]}>Assistant IA</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton} activeOpacity={0.7}>
-              <Ionicons name="close" size={24} color={darkColor} />
+              <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
           </View>
 
@@ -146,11 +150,11 @@ export default function AIModal({ visible, onClose, onSubmit }: AIModalProps) {
             contentContainerStyle={styles.contentContainer}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.label}>Que veux-tu faire ?</Text>
+            <Text style={[styles.label, { color: theme.text }]}>Que veux-tu faire ?</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text }]}
               placeholder="Ex: Crée un planning pour demain avec mes lieux préférés"
-              placeholderTextColor="#999"
+              placeholderTextColor={theme.icon}
               value={prompt}
               onChangeText={setPrompt}
               multiline
@@ -160,22 +164,22 @@ export default function AIModal({ visible, onClose, onSubmit }: AIModalProps) {
             />
 
             <View style={styles.suggestionsContainer}>
-              <Text style={styles.suggestionsTitle}>Suggestions :</Text>
+              <Text style={[styles.suggestionsTitle, { color: theme.icon }]}>Suggestions :</Text>
               {SUGGESTIONS.map((suggestion, index) => (
                 <TouchableOpacity
                   key={index}
-                  style={styles.suggestionChip}
+                  style={[styles.suggestionChip, { backgroundColor: theme.background, borderColor: theme.border }]}
                   onPress={() => handleSuggestionPress(suggestion)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="bulb-outline" size={14} color="#666" />
-                  <Text style={styles.suggestionText}>{suggestion}</Text>
+                  <Ionicons name="bulb-outline" size={14} color={theme.icon} />
+                  <Text style={[styles.suggestionText, { color: theme.icon }]}>{suggestion}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </ScrollView>
 
-          <View style={styles.footer}>
+          <View style={[styles.footer, { borderTopColor: theme.border }]}>
             <TouchableOpacity
               style={[styles.submitButton, (!prompt.trim() || isLoading) && styles.submitButtonDisabled]}
               onPress={handleSubmit}
@@ -210,7 +214,6 @@ const styles = StyleSheet.create({
     backgroundColor: darkColorWithAlpha(0.5),
   },
   modal: {
-    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: MODAL_HEIGHT,
@@ -224,7 +227,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -235,9 +237,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   headerTitle: {
     fontSize: 18,
@@ -262,20 +264,16 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 15,
     fontWeight: '600',
-    color: darkColor,
     marginBottom: 12,
     letterSpacing: -0.2,
   },
   input: {
-    backgroundColor: '#F8F8F8',
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    color: darkColor,
     minHeight: 100,
     maxHeight: 120,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
     marginBottom: 20,
   },
   suggestionsContainer: {
@@ -284,24 +282,20 @@ const styles = StyleSheet.create({
   suggestionsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
     marginBottom: 12,
   },
   suggestionChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
     borderRadius: 10,
     padding: 12,
     marginBottom: 8,
     gap: 8,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
   },
   suggestionText: {
     flex: 1,
     fontSize: 14,
-    color: '#666',
     lineHeight: 20,
   },
   footer: {
@@ -309,7 +303,6 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 20,
     borderTopWidth: 1,
-    borderTopColor: '#EFEFEF',
   },
   submitButton: {
     flexDirection: 'row',

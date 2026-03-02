@@ -16,7 +16,7 @@ const FALLBACK_HEADER_OFFSET = Platform.OS === 'ios' ? 120 : 56;
 
 const HEADER_ANIMATION_DURATION = 250;
 
-export default function SearchScreen() {
+export default function PlacesScreen() {
   const router = useRouter();
   const headerHeight = useHeaderHeight();
   const colorScheme = useColorScheme();

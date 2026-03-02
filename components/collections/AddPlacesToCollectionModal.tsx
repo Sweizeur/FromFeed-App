@@ -11,10 +11,11 @@ import {
   ScrollView,
   Dimensions,
   Image,
+  useColorScheme,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { darkColor, darkColorWithAlpha } from '@/constants/theme';
+import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -37,7 +38,7 @@ interface AddPlacesToCollectionModalProps {
 }
 
 // Composant Skeleton pour le chargement
-function SkeletonItem() {
+function SkeletonItem({ bg, border, block }: { bg: string; border: string; block: string }) {
   const shimmer = useSharedValue(0);
 
   useEffect(() => {
@@ -59,12 +60,12 @@ function SkeletonItem() {
   });
 
   return (
-    <View style={styles.placeItemSkeleton}>
+    <View style={[styles.placeItemSkeleton, { backgroundColor: bg, borderColor: border }]}>
       <View style={styles.placeItemContent}>
-        <Animated.View style={[styles.skeletonImage, shimmerStyle]} />
+        <Animated.View style={[styles.skeletonImage, { backgroundColor: block }, shimmerStyle]} />
         <View style={styles.skeletonTextContainer}>
-          <Animated.View style={[styles.skeletonText, shimmerStyle]} />
-          <Animated.View style={[styles.skeletonText, styles.skeletonTextSmall, shimmerStyle]} />
+          <Animated.View style={[styles.skeletonText, { backgroundColor: block }, shimmerStyle]} />
+          <Animated.View style={[styles.skeletonText, styles.skeletonTextSmall, { backgroundColor: block }, shimmerStyle]} />
         </View>
       </View>
     </View>
@@ -79,6 +80,9 @@ export default function AddPlacesToCollectionModal({
   onSuccess,
 }: AddPlacesToCollectionModalProps) {
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const isDark = scheme === 'dark';
+  const theme = Colors[isDark ? 'dark' : 'light'];
   const screenHeight = Dimensions.get('window').height;
   const FIXED_SHEET_HEIGHT = screenHeight * 0.6;
   const translateY = useSharedValue(FIXED_SHEET_HEIGHT);
@@ -89,6 +93,9 @@ export default function AddPlacesToCollectionModal({
   const [selectedPlaceIds, setSelectedPlaceIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
+  const skeletonBg = isDark ? '#1C1D1E' : theme.background;
+  const skeletonBorder = isDark ? '#2C2E30' : theme.border;
+  const skeletonBlock = isDark ? '#2C2E30' : theme.border;
 
   useEffect(() => {
     if (visible) {
@@ -118,7 +125,7 @@ export default function AddPlacesToCollectionModal({
           setLoading(true);
           const response = await getAllPlacesSummary();
           // Filtrer les lieux déjà dans la collection
-          const availablePlaces = response.places.filter(
+          const availablePlaces = (response?.places ?? []).filter(
             (place) => !existingPlaceIds.includes(place.id)
           );
           setPlaces(availablePlaces);
@@ -244,22 +251,23 @@ export default function AddPlacesToCollectionModal({
         <Animated.View
           style={[
             styles.bottomSheet,
+            { backgroundColor: theme.surface, shadowColor: isDark ? '#000' : darkColor },
             { height: FIXED_SHEET_HEIGHT },
             animatedSheetStyle,
           ]}
         >
           {/* Grabber */}
-          <View style={styles.bottomSheetGrabber} />
+          <View style={[styles.bottomSheetGrabber, { backgroundColor: theme.border }]} />
 
           {/* Header */}
           <View style={styles.bottomSheetHeader}>
-            <Text style={styles.bottomSheetTitle}>Ajouter des lieux</Text>
+            <Text style={[styles.bottomSheetTitle, { color: theme.text }]}>Ajouter des lieux</Text>
             <TouchableOpacity
               onPress={onClose}
-              style={styles.bottomSheetCloseButton}
+              style={[styles.bottomSheetCloseButton, { backgroundColor: theme.background, borderColor: theme.border }]}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={22} color="#666" />
+              <Ionicons name="close" size={22} color={theme.icon} />
             </TouchableOpacity>
           </View>
 
@@ -274,14 +282,14 @@ export default function AddPlacesToCollectionModal({
               <View style={styles.placesList}>
                 {/* Skeletons pendant le chargement */}
                 {[1, 2, 3, 4].map((i) => (
-                  <SkeletonItem key={i} />
+                  <SkeletonItem key={i} bg={skeletonBg} border={skeletonBorder} block={skeletonBlock} />
                 ))}
               </View>
             ) : places.length === 0 ? (
               <View style={styles.emptyState}>
-                <Ionicons name="location-outline" size={48} color="#CCC" />
-                <Text style={styles.emptyStateText}>Aucun lieu disponible</Text>
-                <Text style={styles.emptyStateSubtext}>
+                <Ionicons name="location-outline" size={48} color={theme.border} />
+                <Text style={[styles.emptyStateText, { color: theme.text }]}>Aucun lieu disponible</Text>
+                <Text style={[styles.emptyStateSubtext, { color: theme.icon }]}>
                   Tous vos lieux sont déjà dans cette collection
                 </Text>
               </View>
@@ -292,6 +300,7 @@ export default function AddPlacesToCollectionModal({
                     key={place.id}
                     style={[
                       styles.placeItem,
+                      { backgroundColor: theme.background, borderColor: theme.border },
                       selectedPlaceIds.includes(place.id) && styles.placeItemSelected,
                     ]}
                     onPress={() => handleTogglePlace(place.id)}
@@ -304,14 +313,15 @@ export default function AddPlacesToCollectionModal({
                           resizeMode="cover"
                         />
                       ) : (
-                        <View style={styles.placeImagePlaceholder}>
-                          <Ionicons name="location" size={20} color={selectedPlaceIds.includes(place.id) ? '#fff' : '#999'} />
+                        <View style={[styles.placeImagePlaceholder, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                          <Ionicons name="location" size={20} color={selectedPlaceIds.includes(place.id) ? '#fff' : theme.icon} />
                         </View>
                       )}
                       <View style={styles.placeItemTextContainer}>
                         <Text
                           style={[
                             styles.placeItemText,
+                            { color: theme.text },
                             selectedPlaceIds.includes(place.id) && styles.placeItemTextSelected,
                           ]}
                           numberOfLines={1}
@@ -321,6 +331,7 @@ export default function AddPlacesToCollectionModal({
                         <Text
                           style={[
                             styles.placeItemAddress,
+                            { color: theme.icon },
                             selectedPlaceIds.includes(place.id) && styles.placeItemAddressSelected,
                           ]}
                           numberOfLines={1}
@@ -340,7 +351,16 @@ export default function AddPlacesToCollectionModal({
 
           {/* Bouton de soumission - Fixe en bas */}
           {places.length > 0 && (
-            <View style={[styles.submitButtonContainer, { paddingBottom: insets.bottom + 20 }]}>
+            <View
+              style={[
+                styles.submitButtonContainer,
+                {
+                  paddingBottom: insets.bottom + 20,
+                  backgroundColor: theme.surface,
+                  borderTopColor: theme.border,
+                },
+              ]}
+            >
               <TouchableOpacity
                 style={[
                   styles.submitButton,
@@ -373,7 +393,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: darkColor,
@@ -386,7 +405,6 @@ const styles = StyleSheet.create({
   bottomSheetGrabber: {
     width: 40,
     height: 4,
-    backgroundColor: '#E0E0E0',
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 12,
@@ -403,15 +421,14 @@ const styles = StyleSheet.create({
   bottomSheetTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: darkColor,
   },
   bottomSheetCloseButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   bottomSheetContent: {
     flex: 1,
@@ -423,9 +440,7 @@ const styles = StyleSheet.create({
   submitButtonContainer: {
     paddingHorizontal: 24,
     paddingTop: 12,
-    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#EFEFEF',
   },
   placesList: {
     gap: 8,
@@ -435,11 +450,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8F8F8',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   placeItemSelected: {
     backgroundColor: darkColor,
@@ -455,15 +468,14 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 8,
-    backgroundColor: '#E0E0E0',
   },
   placeImagePlaceholder: {
     width: 50,
     height: 50,
     borderRadius: 8,
-    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   placeItemTextContainer: {
     flex: 1,
@@ -471,7 +483,6 @@ const styles = StyleSheet.create({
   placeItemText: {
     fontSize: 16,
     fontWeight: '500',
-    color: darkColor,
     marginBottom: 4,
   },
   placeItemTextSelected: {
@@ -479,7 +490,6 @@ const styles = StyleSheet.create({
   },
   placeItemAddress: {
     fontSize: 13,
-    color: '#666',
   },
   placeItemAddressSelected: {
     color: '#CCC',
@@ -491,13 +501,11 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 18,
     fontWeight: '600',
-    color: darkColor,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#666',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
@@ -520,17 +528,14 @@ const styles = StyleSheet.create({
   placeItemSkeleton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   skeletonImage: {
     width: 50,
     height: 50,
     borderRadius: 8,
-    backgroundColor: '#E0E0E0',
   },
   skeletonTextContainer: {
     flex: 1,
@@ -539,7 +544,6 @@ const styles = StyleSheet.create({
   skeletonText: {
     width: '70%',
     height: 16,
-    backgroundColor: '#E0E0E0',
     borderRadius: 4,
     marginBottom: 6,
   },

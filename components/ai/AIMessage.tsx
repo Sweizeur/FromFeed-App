@@ -5,9 +5,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import DraftPlanCard from './DraftPlanCard';
 import MarkdownText from './MarkdownText';
 
-const surfaceColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#2C2E30' : '#F5F5F5');
 const userBubbleColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#3a3b3d' : darkColor);
-const mutedColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#9BA1A6' : '#666');
 
 interface DraftPlanActivity {
   placeName: string;
@@ -42,10 +40,11 @@ interface AIMessageProps {
 
 export default function AIMessage({ message, onAddToCalendar, colorScheme = 'light' }: AIMessageProps) {
   const isUser = message.role === 'user';
-  const surface = surfaceColor(colorScheme);
+  const theme = Colors[colorScheme];
+  const surface = theme.surface;
   const userBubble = userBubbleColor(colorScheme);
-  const aiTextColor = colorScheme === 'dark' ? Colors.dark.text : darkColor;
-  const muted = mutedColor(colorScheme);
+  const aiTextColor = theme.text;
+  const muted = theme.icon;
 
   return (
     <View
@@ -66,7 +65,13 @@ export default function AIMessage({ message, onAddToCalendar, colorScheme = 'lig
       <View
         style={[
           isUser ? styles.userMessageBubble : styles.aiMessageBubble,
-          isUser ? { backgroundColor: userBubble } : { backgroundColor: surface },
+          isUser
+            ? { backgroundColor: userBubble }
+            : {
+                backgroundColor: surface,
+                borderWidth: 1,
+                borderColor: theme.border,
+              },
         ]}
       >
         {message.content && (
