@@ -1,4 +1,4 @@
-import { getStoredToken } from './auth-mobile';
+import { getStoredToken, refreshSession } from './auth-mobile';
 import type {
   LinkPreviewResponse,
   Place,
@@ -67,13 +67,17 @@ type ApiRequestOptions = RequestInit & {
   timeoutMs?: number;
 };
 
+/** Interne : éviter retry infini sur 401 */
+type ApiRequestInternalOptions = ApiRequestOptions & { _retried401?: boolean };
+
 async function apiRequest<T>(
   endpoint: string,
-  options: ApiRequestOptions = {}
+  options: ApiRequestInternalOptions = {}
 ): Promise<T | null> {
+  const { _retried401, ...requestOptions } = options;
   const token = await getStoredToken();
-  
-  const { timeoutMs = 15000, ...fetchOptions } = options;
+
+  const { timeoutMs = 15000, ...fetchOptions } = requestOptions;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -86,16 +90,16 @@ async function apiRequest<T>(
   }
 
   devLog('[API] Requête vers:', `${BACKEND_URL}${endpoint}`, 'Method:', options.method || 'GET');
-  
+
   // Ajouter les headers ngrok si nécessaire
   if (BACKEND_URL.includes('ngrok')) {
     headers['ngrok-skip-browser-warning'] = 'true';
   }
-  
+
   // Créer un AbortController pour gérer le timeout (compatible React Native)
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  
+
   let response: Response;
   try {
     response = await fetch(`${BACKEND_URL}${endpoint}`, {
@@ -111,17 +115,26 @@ async function apiRequest<T>(
     }
     // Ne pas logger les erreurs réseau "Network request failed" - elles sont attendues
     // quand l'utilisateur quitte l'app pendant une requête
-    const isNetworkError = error?.message?.includes('Network request failed') || 
-                          error?.name === 'AbortError';
+    const isNetworkError = error?.message?.includes('Network request failed') ||
+      error?.name === 'AbortError';
     if (!isNetworkError) {
       devError('[API] Erreur réseau:', error);
     }
     return null;
   }
-  
+
   clearTimeout(timeoutId);
 
   devLog('[API] Réponse status:', response.status, 'ok:', response.ok);
+
+  // 401 avec token envoyé = session expirée ou race avec refresh : tenter un refresh puis une seule retry
+  if (response.status === 401 && token && !_retried401) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      devLog('[API] Session rafraîchie, retry de la requête');
+      return apiRequest<T>(endpoint, { ...requestOptions, _retried401: true });
+    }
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
