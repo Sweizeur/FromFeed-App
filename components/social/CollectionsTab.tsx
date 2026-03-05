@@ -49,11 +49,6 @@ function CollectionCard({
         <View style={styles.cardContent}>
           <View style={styles.nameRow}>
             <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{displayName}</Text>
-            {collection.isPrivate ? (
-              <Ionicons name="lock-closed" size={13} color={subtextColor} style={{ marginLeft: 6 }} />
-            ) : (
-              <Ionicons name="globe-outline" size={13} color={subtextColor} style={{ marginLeft: 6 }} />
-            )}
           </View>
           {collection.description ? (
             <Text style={[styles.description, { color: subtextColor }]} numberOfLines={1}>{collection.description}</Text>

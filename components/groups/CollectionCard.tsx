@@ -40,14 +40,9 @@ function CollectionCard({ collection, onPress }: CollectionCardProps) {
             <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
               {collection.name}
             </Text>
-            {!collection.isPrivate && collection.sharedWithGroups.length > 0 && (
+            {collection.sharedWithGroups.length > 0 && (
               <View style={styles.sharedBadge}>
                 <Ionicons name="people" size={12} color="#fff" />
-              </View>
-            )}
-            {collection.isPrivate && (
-              <View style={[styles.privateBadge, { backgroundColor: theme.background }]}>
-                <Ionicons name="lock-closed" size={12} color={theme.icon} />
               </View>
             )}
           </View>
@@ -136,13 +131,6 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     backgroundColor: darkColor,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  privateBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },

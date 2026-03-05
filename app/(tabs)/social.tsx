@@ -26,7 +26,7 @@ export default function SocialScreen() {
           onChange={(e) => setSelectedTab(e.nativeEvent.selectedSegmentIndex)}
           appearance={isDark ? 'dark' : 'light'}
           backgroundColor={theme.surface}
-          tintColor={isDark ? '#4B5563' : '#D4D4D8'}
+          tintColor={isDark ? '#5f646b' : '#D4D4D8'}
         />
       </View>
 

@@ -8,6 +8,7 @@ import {
   TouchableWithoutFeedback,
   AppState,
   useColorScheme,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Marker } from 'react-native-maps';
@@ -32,10 +33,12 @@ import { usePlaces } from '@/hooks/usePlaces';
 import { useMap } from '@/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
 import { useShareHandler } from '@/hooks/useShareHandler';
+import { useAddingPlace } from '@/contexts/AddingPlaceContext';
 import { matchesTypeFilter } from '@/utils/typeHierarchy';
 import { darkColor, Colors } from '@/constants/theme';
 import GlassButton from '@/components/ui/GlassButton';
 import MapTabHeader from '@/components/navigation/MapTabHeader';
+import LinkLoadBanner from '@/components/navigation/LinkLoadBanner';
 import { router } from 'expo-router';
 
 export default function MapScreen() {
@@ -67,6 +70,7 @@ export default function MapScreen() {
     isProgrammaticChange,
   } = useMap();
   const { toast, showSuccess, showError, hideToast } = useToast();
+  const { isAddingPlace, setAddingPlace, linkLoadStatus, setLinkLoadStatus } = useAddingPlace();
 
   // Suivi utilisateur : carte recentrée à chaque déplacement ; désactivé quand l'utilisateur déplace la carte
   const [followUser, setFollowUser] = useState(false);
@@ -74,7 +78,6 @@ export default function MapScreen() {
   // État local pour l'UI
   const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
   const [linkInput, setLinkInput] = useState('');
-  const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [processingUrl, setProcessingUrl] = useState<string | null>(null);
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const processingUrlRef = useRef<string | null>(null);
@@ -107,7 +110,7 @@ export default function MapScreen() {
 
   const clearPendingTask = useCallback(() => {
     setPendingTaskId(null);
-    setIsAddingPlace(false);
+    setAddingPlace(false);
     setProcessingUrl(null);
     processingUrlRef.current = null;
     AsyncStorage.removeItem(PENDING_LINK_TASK_ID);
@@ -115,17 +118,18 @@ export default function MapScreen() {
       clearTimeout(pollTimeoutRef.current);
       pollTimeoutRef.current = null;
     }
-  }, []);
+  }, [setAddingPlace]);
 
   const handleSaveLink = useCallback(async (result: any) => {
     if (result && 'processing' in result && result.processing === true) {
       showSuccess('Le lien est en cours de traitement. Le lieu sera ajouté automatiquement une fois l\'analyse terminée.');
-      setIsAddingPlace(true);
+      setAddingPlace(true);
       return;
     }
     if (!result?.placeId) {
       showError('Le lieu n\'a pas pu être ajouté. Les informations extraites ne correspondent pas aux données Google Places.');
-      setIsAddingPlace(false);
+      setAddingPlace(false);
+      setLinkLoadStatus('idle');
       return;
     }
     const placeName = result.llm?.placeName || result.google?.name || result.place?.name || 'Lieu';
@@ -135,34 +139,34 @@ export default function MapScreen() {
       : `Bravo, ${placeName} a été ajouté dans vos lieux sauvegardés`;
     showSuccess(successMessage);
     await refreshPlaces(true, true);
-    setTimeout(() => {
-      setIsAddingPlace(false);
-      setProcessingUrl(null);
-      processingUrlRef.current = null;
-    }, 500);
-  }, [showSuccess, showError, refreshPlaces]);
+    setProcessingUrl(null);
+    processingUrlRef.current = null;
+  }, [showSuccess, showError, refreshPlaces, setAddingPlace, setLinkLoadStatus]);
 
   const checkTaskStatus = useCallback(async (taskId: string) => {
     const statusRes = await getTaskStatus(taskId);
     if (!statusRes) return false;
     if (statusRes.status === 'done' && statusRes.result) {
+      setLinkLoadStatus('success');
       await handleSaveLink(statusRes.result);
       clearPendingTask();
       return true;
     }
     if (statusRes.status === 'failed' || statusRes.status === 'expired') {
       showError(statusRes.error || 'L\'analyse du lien a échoué.');
+      setLinkLoadStatus('idle');
       clearPendingTask();
       return true;
     }
     return false;
-  }, [handleSaveLink, clearPendingTask, showError]);
+  }, [handleSaveLink, clearPendingTask, showError, setLinkLoadStatus]);
 
   const scheduleNextPoll = useCallback((taskId: string, attempt: number) => {
     if (pollTimeoutRef.current) return;
     const elapsed = Date.now() - pollStartRef.current;
     if (elapsed >= POLL_MAX_MS) {
       showError('L\'analyse prend trop de temps. Réessayez plus tard.');
+      setLinkLoadStatus('idle');
       clearPendingTask();
       return;
     }
@@ -172,17 +176,18 @@ export default function MapScreen() {
       const done = await checkTaskStatus(taskId);
       if (!done) scheduleNextPoll(taskId, attempt + 1);
     }, delay);
-  }, [checkTaskStatus, clearPendingTask, showError]);
+  }, [checkTaskStatus, clearPendingTask, showError, setLinkLoadStatus]);
 
   const handleTaskCreated = useCallback((taskId: string) => {
     setPendingTaskId(taskId);
-    setIsAddingPlace(true);
+    setAddingPlace(true);
+    setLinkLoadStatus('loading');
     setProcessingUrl('En cours...');
     processingUrlRef.current = 'pending';
     AsyncStorage.setItem(PENDING_LINK_TASK_ID, taskId);
     pollStartRef.current = Date.now();
     scheduleNextPoll(taskId, 0);
-  }, [scheduleNextPoll]);
+  }, [scheduleNextPoll, setAddingPlace, setLinkLoadStatus]);
 
   useEffect(() => {
     if (!pendingTaskId) return;
@@ -197,14 +202,15 @@ export default function MapScreen() {
       const stored = await AsyncStorage.getItem(PENDING_LINK_TASK_ID);
       if (cancelled || !stored) return;
       setPendingTaskId(stored);
-      setIsAddingPlace(true);
+      setAddingPlace(true);
+      setLinkLoadStatus('loading');
       setProcessingUrl('En cours...');
       processingUrlRef.current = 'pending';
       pollStartRef.current = Date.now();
       scheduleNextPoll(stored, 0);
     })();
     return () => { cancelled = true; };
-  }, [scheduleNextPoll]);
+  }, [scheduleNextPoll, setAddingPlace, setLinkLoadStatus]);
 
   const handleSharedUrl = React.useCallback(async (url: string) => {
     if (processingUrlRef.current === url) return;
@@ -213,7 +219,8 @@ export default function MapScreen() {
       const response = await createLinkPreviewTask(url);
       if (response?.taskId) {
         setPendingTaskId(response.taskId);
-        setIsAddingPlace(true);
+        setAddingPlace(true);
+        setLinkLoadStatus('loading');
         setProcessingUrl(url);
         AsyncStorage.setItem(PENDING_LINK_TASK_ID, response.taskId);
         pollStartRef.current = Date.now();
@@ -230,10 +237,29 @@ export default function MapScreen() {
         showError(error?.message || 'Une erreur est survenue lors de l\'analyse du lien.');
       }
       processingUrlRef.current = null;
+      setLinkLoadStatus('idle');
     }
-  }, [showError, scheduleNextPoll]);
+  }, [showError, scheduleNextPoll, setAddingPlace, setLinkLoadStatus]);
 
   useShareHandler(handleSharedUrl);
+
+  // Quand l’app s’ouvre depuis la Share Extension (openHostApp avec ?shareUrl=...)
+  useEffect(() => {
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+      try {
+        const parsed = new URL(url);
+        const shareUrl = parsed.searchParams.get('shareUrl');
+        if (shareUrl) {
+          handleSharedUrl(decodeURIComponent(shareUrl));
+        }
+      } catch (_) {}
+    };
+
+    Linking.getInitialURL().then(handleUrl);
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    return () => sub.remove();
+  }, [handleSharedUrl]);
 
   const isRefreshingOnAppStateRef = useRef(false);
   useEffect(() => {
@@ -250,7 +276,8 @@ export default function MapScreen() {
           } else {
             // Encore en cours → relancer le polling
             setPendingTaskId(taskId);
-            setIsAddingPlace(true);
+            setAddingPlace(true);
+            setLinkLoadStatus('loading');
             setProcessingUrl('En cours...');
             pollStartRef.current = Date.now();
             scheduleNextPoll(taskId, 0);
@@ -273,7 +300,7 @@ export default function MapScreen() {
       }
     });
     return () => subscription.remove();
-  }, [pendingTaskId, isAddingPlace, processingUrl, refreshPlaces, checkTaskStatus, scheduleNextPoll]);
+  }, [pendingTaskId, isAddingPlace, processingUrl, refreshPlaces, checkTaskStatus, scheduleNextPoll, setAddingPlace, setLinkLoadStatus]);
 
   const handleLinkError = (error: Error) => {
     showError(error.message || 'Une erreur est survenue lors de l\'analyse du lien.');
@@ -325,6 +352,10 @@ export default function MapScreen() {
           placesCount={filteredPlaces.length}
           onAddPress={() => setIsLinkModalVisible(true)}
           onPlacesPress={() => router.navigate('/places')}
+        />
+        <LinkLoadBanner
+          status={linkLoadStatus}
+          onSuccessDismiss={() => setLinkLoadStatus('idle')}
         />
         <View style={styles.mapContainer}>
             {loadingLocation && (
@@ -419,14 +450,16 @@ export default function MapScreen() {
           onLinkInputChange={setLinkInput}
           onTaskCreated={handleTaskCreated}
           onStartProcessing={() => {
-            setIsAddingPlace(true);
+            setAddingPlace(true);
+            setLinkLoadStatus('loading');
             if (linkInput.trim()) setProcessingUrl(linkInput.trim());
           }}
           onError={(error) => {
             const isNetworkError = error?.message?.includes('Network request failed') ||
               error?.message?.includes('Aborted') || error?.name === 'AbortError';
             if (!isNetworkError) {
-              setIsAddingPlace(false);
+              setAddingPlace(false);
+              setLinkLoadStatus('idle');
               setProcessingUrl(null);
               handleLinkError(error);
             }

@@ -45,6 +45,11 @@ function getReverseClientId(clientId: string): string {
 const TOKEN_STORAGE_KEY = 'fromfeed_auth_token'; // Pas de @ ni : pour SecureStore
 const USER_STORAGE_KEY = '@fromfeed:user'; // AsyncStorage accepte @ et :
 
+/** Sur iOS, partage du keychain avec la Share Extension (même App Group). */
+const SECURE_STORE_IOS_OPTIONS = Platform.OS === 'ios'
+  ? { accessGroup: 'group.com.sweizeur.fromfeedapp' as const }
+  : {};
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -75,24 +80,33 @@ export interface AuthResult {
  */
 export async function getStoredToken(): Promise<string | null> {
   try {
-    // Essayer de récupérer depuis SecureStore (nouveau système sécurisé)
-    const token = await SecureStore.getItemAsync(TOKEN_STORAGE_KEY);
+    // Essayer de récupérer depuis SecureStore (groupe partagé iOS pour l’extension)
+    const token = await SecureStore.getItemAsync(TOKEN_STORAGE_KEY, SECURE_STORE_IOS_OPTIONS);
     if (token) {
       return token;
     }
-    
+
+    // Migration iOS : token encore dans le keychain par défaut → copier dans le groupe partagé
+    if (Platform.OS === 'ios') {
+      const legacyToken = await SecureStore.getItemAsync(TOKEN_STORAGE_KEY, {});
+      if (legacyToken) {
+        await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, legacyToken, SECURE_STORE_IOS_OPTIONS);
+        return legacyToken;
+      }
+    }
+
     // Migration : si pas de token dans SecureStore, vérifier AsyncStorage (ancien système)
     // L'ancienne clé était '@fromfeed:auth_token' (avec @ et :)
     const oldKey = '@fromfeed:auth_token';
     const oldToken = await AsyncStorage.getItem(oldKey);
     if (oldToken) {
       // Migrer vers SecureStore avec la nouvelle clé
-      await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, oldToken);
+      await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, oldToken, SECURE_STORE_IOS_OPTIONS);
       // Supprimer de l'ancien stockage
       await AsyncStorage.removeItem(oldKey);
       return oldToken;
     }
-    
+
     return null;
   } catch (error) {
     if (isDevelopment()) {
@@ -114,7 +128,7 @@ export async function storeToken(token: string): Promise<void> {
     return;
   }
   try {
-    await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
+    await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token, SECURE_STORE_IOS_OPTIONS);
   } catch (error) {
     if (isDevelopment()) {
       console.error('Error storing token in SecureStore:', error);
@@ -129,7 +143,7 @@ export async function storeToken(token: string): Promise<void> {
 export async function clearToken(): Promise<void> {
   try {
     // Supprimer le token du SecureStore (nouveau système)
-    await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
+    await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY, SECURE_STORE_IOS_OPTIONS);
     // Supprimer aussi d'AsyncStorage au cas où (migration/ancien système)
     await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
     // Supprimer les infos utilisateur d'AsyncStorage (non sensibles mais on nettoie tout)

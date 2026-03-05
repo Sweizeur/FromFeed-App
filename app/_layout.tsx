@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
+import { AddingPlaceProvider } from '@/contexts/AddingPlaceContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -34,6 +35,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider value={navigationTheme}>
+          <AddingPlaceProvider>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -44,7 +46,8 @@ export default function RootLayout() {
               <Stack.Screen name="edit-collection" />
               <Stack.Screen name="edit-collection-places" />
             </Stack>
-          <StatusBar style="auto" />
+            <StatusBar style="auto" />
+          </AddingPlaceProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

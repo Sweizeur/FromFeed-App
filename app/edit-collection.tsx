@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   ScrollView,
   TextInput,
-  Switch,
   useColorScheme,
   Platform,
   KeyboardAvoidingView,
@@ -49,7 +48,6 @@ export default function EditCollectionScreen() {
   const [description, setDescription] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('📁');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const [isPrivate, setIsPrivate] = useState(false);
   const { optimisticUpdate } = useCollectionsStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -75,7 +73,6 @@ export default function EditCollectionScreen() {
         setSelectedEmoji(match ? match[1] : '📁');
         setName(match ? match[2] : col.name);
         setDescription(col.description ?? '');
-        setIsPrivate(col.isPrivate ?? false);
       } catch {
         // silent
       } finally {
@@ -90,10 +87,10 @@ export default function EditCollectionScreen() {
     optimisticUpdate(id, {
       name: `${selectedEmoji} ${name.trim()}`,
       description: description.trim() || undefined,
-      isPrivate,
+      isPrivate: sharedFriendIds.length === 0,
     });
     router.back();
-  }, [id, selectedEmoji, name, description, isPrivate, router, optimisticUpdate]);
+  }, [id, selectedEmoji, name, description, sharedFriendIds.length, router, optimisticUpdate]);
 
   if (loading) {
     return (
@@ -160,28 +157,7 @@ export default function EditCollectionScreen() {
             textAlignVertical="top"
           />
 
-          <View style={[styles.toggleRow, { backgroundColor: inputBg, borderColor: inputBorder }]}>
-            <View style={styles.toggleInfo}>
-              <Ionicons name={isPrivate ? 'lock-closed' : 'globe-outline'} size={20} color={theme.text} />
-              <View style={styles.toggleTextContainer}>
-                <Text style={[styles.toggleTitle, { color: theme.text }]}>
-                  {isPrivate ? 'Privée' : 'Publique'}
-                </Text>
-                <Text style={[styles.toggleSubtitle, { color: subtextColor }]}>
-                  {isPrivate ? 'Visible uniquement par vous' : 'Visible par tout le monde'}
-                </Text>
-              </View>
-            </View>
-            <Switch
-              value={isPrivate}
-              onValueChange={setIsPrivate}
-              trackColor={{ false: '#E0E0E0', true: isDark ? theme.text : darkColor }}
-              thumbColor="#fff"
-            />
-          </View>
-
-          {!isPrivate && (
-            <View style={[styles.friendsSection, { backgroundColor: inputBg, borderColor: inputBorder }]}>
+          <View style={[styles.friendsSection, { backgroundColor: inputBg, borderColor: inputBorder }]}>
               <View style={styles.friendsSectionHeader}>
                 <Ionicons name="people" size={20} color={theme.text} />
                 <View style={styles.friendsSectionTextCol}>
@@ -219,7 +195,6 @@ export default function EditCollectionScreen() {
                 })}
               </ScrollView>
             </View>
-          )}
 
           <TouchableOpacity
             style={[styles.primaryBtn, !name.trim() && styles.primaryBtnDisabled]}
@@ -331,19 +306,6 @@ const styles = StyleSheet.create({
   friendAvatarSelected: { borderWidth: 2, borderColor: '#34C759' },
   friendAvatarText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   friendChipName: { fontSize: 11, fontWeight: '500', marginTop: 5, textAlign: 'center' },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 24,
-    borderWidth: 1,
-  },
-  toggleInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  toggleTextContainer: { flex: 1 },
-  toggleTitle: { fontSize: 16, fontWeight: '600' },
-  toggleSubtitle: { fontSize: 13, marginTop: 2 },
   primaryBtn: {
     backgroundColor: darkColor,
     borderRadius: 12,

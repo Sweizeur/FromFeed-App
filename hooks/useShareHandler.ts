@@ -1,16 +1,43 @@
 import { useEffect, useRef } from 'react';
-import { useShareIntent } from 'expo-share-intent';
+import { AppState, Platform } from 'react-native';
+import Constants from 'expo-constants';
+import { useShareIntent, ShareIntentModule } from 'expo-share-intent';
+
+function getShareScheme(): string {
+  const s = Constants.expoConfig?.scheme;
+  return Array.isArray(s) ? s[0] ?? 'com.fromfeed.app' : s ?? 'com.fromfeed.app';
+}
+
+/**
+ * Sur iOS, quand l’extension enregistre un lien sans ouvrir l’app, les données
+ * restent dans l’App Group. On force une lecture au passage en actif pour les récupérer.
+ */
+function usePollPendingShareOnActive(isReady: boolean) {
+  useEffect(() => {
+    if (!isReady || Platform.OS !== 'ios' || !ShareIntentModule) return;
+    const scheme = getShareScheme();
+    const key = `${scheme}ShareKey`;
+    const tryRead = () => {
+      ShareIntentModule.getShareIntent(`${scheme}://dataUrl=${key}#weburl`);
+      ShareIntentModule.getShareIntent(`${scheme}://dataUrl=${key}#text`);
+    };
+    tryRead();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') tryRead();
+    });
+    return () => sub.remove();
+  }, [isReady]);
+}
 
 /**
  * Hook pour gérer les URLs partagées depuis le share sheet
- * Intercepte les URLs TikTok/Instagram et les passe au callback
- * Utilise expo-share-intent pour recevoir les partages depuis le share sheet
+ * Utilise expo-share-intent pour recevoir les partages (extension ou ouverture par lien)
  */
 export function useShareHandler(onUrlReceived: (url: string) => void) {
   const hasHandledShare = useRef<string | null>(null);
-  
-  // Utiliser le hook useShareIntent d'expo-share-intent
+
   const { isReady, hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
+  usePollPendingShareOnActive(isReady);
 
   useEffect(() => {
     // Attendre que le module soit prêt
@@ -57,25 +84,13 @@ export function useShareHandler(onUrlReceived: (url: string) => void) {
 
       if (!extractedUrl) {
         console.log('[ShareHandler] Aucune URL trouvée dans le contenu partagé:', shareIntent);
-        // Nettoyer quand même le share intent
         resetShareIntent(true);
         return;
       }
 
-      // Vérifier si c'est une URL TikTok ou Instagram
-      const isTikTok = extractedUrl.includes('tiktok.com') || extractedUrl.includes('vm.tiktok.com');
-      const isInstagram = extractedUrl.includes('instagram.com') && extractedUrl.includes('/reel/');
-
-      if (isTikTok || isInstagram) {
-        console.log('[ShareHandler] URL TikTok/Instagram détectée:', extractedUrl);
-        onUrlReceived(extractedUrl);
-        // Nettoyer le share intent après traitement
-        resetShareIntent(true);
-      } else {
-        console.log('[ShareHandler] URL partagée non supportée:', extractedUrl);
-        // Nettoyer le share intent même si l'URL n'est pas supportée
-        resetShareIntent(true);
-      }
+      // Traiter toute URL partagée (TikTok, Instagram, ou autre lien de lieu)
+      onUrlReceived(extractedUrl);
+      resetShareIntent(true);
     }
   }, [isReady, hasShareIntent, shareIntent, onUrlReceived, resetShareIntent]);
 }

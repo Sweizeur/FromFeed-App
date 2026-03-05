@@ -8,6 +8,7 @@ import { useSearchText } from './_layout';
 import PlacesList from '@/components/places/PlacesList';
 import PlaceFilters from '@/components/places/PlaceFilters';
 import { usePlaces } from '@/hooks/usePlaces';
+import { useAddingPlace } from '@/contexts/AddingPlaceContext';
 import { Colors } from '@/constants/theme';
 import { matchesTypeFilter } from '@/utils/typeHierarchy';
 
@@ -53,6 +54,7 @@ export default function PlacesScreen() {
     refreshing,
     refreshPlaces,
   } = usePlaces();
+  const { isAddingPlace } = useAddingPlace();
 
   const filteredPlaces = useMemo(() => {
     return placesSummary.filter((place) => {
@@ -86,7 +88,7 @@ export default function PlacesScreen() {
 
   return (
     <Animated.View style={[styles.container, themedStyles.container, containerAnimatedStyle]}>
-      {placesSummary.length === 0 ? (
+      {placesSummary.length === 0 && !isAddingPlace ? (
         <View style={styles.emptyContainer}>
           <Text style={[styles.emptyTitle, themedStyles.emptyTitle]}>Aucun lieu sauvegardé</Text>
           <Text style={[styles.emptyText, themedStyles.emptyText]}>
@@ -110,6 +112,7 @@ export default function PlacesScreen() {
             onPlacePress={handlePlacePress}
             onRefresh={refreshPlaces}
             refreshing={refreshing}
+            isAddingPlace={isAddingPlace}
           />
         </>
       )}
