@@ -22,7 +22,7 @@ export interface LinkPreviewResponse {
     lon: string;
     display_name: string;
     address?: Record<string, string>;
-    [key: string]: any;
+    [key: string]: unknown;
   } | null;
   google?: {
     place_id: string;
@@ -32,7 +32,7 @@ export interface LinkPreviewResponse {
     lat?: number;
     lon?: number;
     website?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   } | null;
   placeId?: string | null;
   processing?: boolean;

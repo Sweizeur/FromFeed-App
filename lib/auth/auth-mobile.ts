@@ -328,21 +328,21 @@ export async function signInWithGoogle(): Promise<AuthResult> {
     }
     
     code = oauthCode;
-    
-    // Récupérer le code verifier généré par expo-auth-session
-    // Si disponible, utiliser celui-là, sinon utiliser le nôtre
-    finalCodeVerifier = (request as any).codeVerifier || codeVerifier;
-    
+
+    // Récupérer le code verifier généré par expo-auth-session (non exposé dans les types publics)
+    const requestWithVerifier = request as AuthSession.AuthRequest & { codeVerifier?: string };
+    finalCodeVerifier = requestWithVerifier.codeVerifier ?? codeVerifier;
+
     if (isDevelopment()) {
       console.log('🔐 ✅ Code OAuth reçu, longueur:', code.length);
       console.log('🔐 ✅ Code verifier disponible:', !!finalCodeVerifier);
-      console.log('🔐 ✅ Code verifier source:', (request as any).codeVerifier ? 'expo-auth-session' : 'manuel');
+      console.log('🔐 ✅ Code verifier source:', requestWithVerifier.codeVerifier ? 'expo-auth-session' : 'manuel');
       console.log('🔐 Redirect URI à envoyer:', redirectURI);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (isDevelopment()) {
       console.error('🔐 ❌ Erreur dans promptAsync:', error);
-      console.error('🔐 ❌ Stack:', error.stack);
+      console.error('🔐 ❌ Stack:', error instanceof Error ? error.stack : undefined);
     }
     return {
       success: false,
@@ -426,11 +426,11 @@ export async function signInWithGoogle(): Promise<AuthResult> {
       success: true,
       data: authSession,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (isDevelopment()) {
       console.error('🔐 ❌ Erreur lors de l\'échange avec le backend:', error);
     }
-    
+
     // Détecter les erreurs réseau
     if (error instanceof TypeError && error.message === 'Network request failed') {
       return {
@@ -506,9 +506,9 @@ export async function refreshSession(): Promise<AuthSessionData | null> {
         },
         signal: controller.signal,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         if (__DEV__) {
           console.error('[Auth] Request timeout');
         }

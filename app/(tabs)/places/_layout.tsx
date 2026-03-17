@@ -1,25 +1,13 @@
-import React, { useState, useCallback, createContext, useContext, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useColorScheme, TouchableOpacity, Platform, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
+import { SearchContextProvider, useSearchText } from '@/features/places/context/SearchContext';
 
-type SearchContextValue = {
-  searchText: string;
-  setSearchText: (text: string) => void;
-};
-
-const SearchContext = createContext<SearchContextValue | null>(null);
-
-export function useSearchText() {
-  const ctx = useContext(SearchContext);
-  if (!ctx) throw new Error('useSearchText must be used inside places layout');
-  return ctx;
-}
-
-export default function PlacesLayout() {
+function PlacesLayoutInner() {
   const router = useRouter();
-  const [searchText, setSearchText] = useState('');
+  const { setSearchText } = useSearchText();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = Colors[isDark ? 'dark' : 'light'];
@@ -28,7 +16,7 @@ export default function PlacesLayout() {
     (e: { nativeEvent: { text: string } }) => {
       setSearchText(e.nativeEvent.text);
     },
-    []
+    [setSearchText]
   );
 
   const handleBack = useCallback(() => {
@@ -57,7 +45,6 @@ export default function PlacesLayout() {
           <TouchableOpacity
             onPress={handleBack}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={{  }}
           >
             <Ionicons
               name="chevron-back"
@@ -79,10 +66,16 @@ export default function PlacesLayout() {
   );
 
   return (
-    <SearchContext.Provider value={{ searchText, setSearchText }}>
-      <Stack screenOptions={screenOptions}>
-        <Stack.Screen name="index" />
-      </Stack>
-    </SearchContext.Provider>
+    <Stack screenOptions={screenOptions}>
+      <Stack.Screen name="index" />
+    </Stack>
+  );
+}
+
+export default function PlacesLayout() {
+  return (
+    <SearchContextProvider>
+      <PlacesLayoutInner />
+    </SearchContextProvider>
   );
 }
