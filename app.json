@@ -56,6 +56,7 @@
       ],
       "@react-native-community/datetimepicker",
       ["expo-calendar", { "calendarPermission": "FromFeed ajoute vos sorties à votre calendrier." }],
+      "./plugins/with-share-extension-modal.js",
       "expo-share-intent",
       "./plugins/with-ats-config.js",
       "./plugins/with-share-extension.js"

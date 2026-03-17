@@ -40,6 +40,6 @@ yarn-error.*
 
 app-example
 
-# generated native folders
-# Garder iOS en versionné (extension de partage, modifs natives)
+# generated native folders (régénérés via npx expo prebuild)
+/ios
 /android
