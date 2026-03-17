@@ -11,19 +11,18 @@ import {
 import { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ClusteredMapView from 'react-native-map-clustering';
-import LinkBottomSheet from '@/components/modals/LinkBottomSheet';
+import LinkBottomSheet from '@/features/places/components/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
-import { deletePlace, type Place, type PlaceSummary } from '@/lib/api';
-import { usePlaces } from '@/hooks/usePlaces';
-import { useMap } from '@/hooks/useMap';
+import { type Place, type PlaceSummary } from '@/lib/api';
+import { usePlaces } from '@/features/places/hooks/usePlaces';
+import { useMap } from '@/features/places/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
-import { useLinkProcessing } from '@/hooks/useLinkProcessing';
-import { useAddingPlace } from '@/contexts/AddingPlaceContext';
-import { matchesTypeFilter } from '@/utils/typeHierarchy';
+import { useLinkProcessing } from '@/features/places/hooks/useLinkProcessing';
+import { useAddingPlace } from '@/features/places/context/AddingPlaceContext';
 import { darkColor, Colors } from '@/constants/theme';
 import GlassButton from '@/components/ui/GlassButton';
-import MapTabHeader from '@/components/navigation/MapTabHeader';
-import LinkLoadBanner from '@/components/navigation/LinkLoadBanner';
+import MapTabHeader from '@/features/places/components/MapTabHeader';
+import LinkLoadBanner from '@/features/places/components/LinkLoadBanner';
 import { router } from 'expo-router';
 
 const CLUSTER_RED = '#E53935';
@@ -41,10 +40,8 @@ export default function MapScreen() {
 
   const {
     placesSummary,
-    selectedPlace,
     refreshPlaces,
     loadPlaceDetails,
-    clearSelectedPlace,
     setSelectedPlace,
   } = usePlaces();
 
@@ -59,7 +56,7 @@ export default function MapScreen() {
     isProgrammaticChange,
   } = useMap();
 
-  const { toast, showSuccess, showError, hideToast } = useToast();
+  const { toast, showError, hideToast } = useToast();
   const { isAddingPlace, setAddingPlace, linkLoadStatus, setLinkLoadStatus, successMessage, setSuccessMessage } = useAddingPlace();
 
   const onPlaceSaved = useCallback(async () => {
@@ -67,7 +64,6 @@ export default function MapScreen() {
   }, [refreshPlaces]);
 
   const {
-    processingUrl,
     handleTaskCreated,
     setProcessingUrl,
   } = useLinkProcessing({ onPlaceSaved });
@@ -75,15 +71,6 @@ export default function MapScreen() {
   const [followUser, setFollowUser] = useState(false);
   const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
   const [linkInput, setLinkInput] = useState('');
-
-  // Filters
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<string | null>(null);
-
-  const handleCategoryChange = (category: string | null) => {
-    setSelectedCategory(category);
-    setSelectedType(null);
-  };
 
   const handlePlacePress = useCallback(
     async (place: Place | PlaceSummary) => {
@@ -102,24 +89,7 @@ export default function MapScreen() {
     [loadPlaceDetails, setSelectedPlace, animateToPlace, showError]
   );
 
-  const handleDeletePlaces = async (placeIds: string[]) => {
-    try {
-      await Promise.all(placeIds.map((id) => deletePlace(id)));
-      showSuccess(`${placeIds.length} lieu${placeIds.length > 1 ? 'x' : ''} supprimé${placeIds.length > 1 ? 's' : ''} avec succès`);
-      await refreshPlaces(false);
-    } catch {
-      showError('Une erreur est survenue lors de la suppression des lieux.');
-    }
-  };
-
-  const filteredPlaces = React.useMemo(() => {
-    if (!selectedCategory && !selectedType) return placesSummary;
-    return placesSummary.filter((place) => {
-      if (selectedCategory && place.category !== selectedCategory) return false;
-      if (selectedCategory && selectedType && !matchesTypeFilter(place.type, selectedType)) return false;
-      return true;
-    });
-  }, [placesSummary, selectedCategory, selectedType]);
+  const filteredPlaces = placesSummary;
 
   const handleCenterUser = useCallback(async () => {
     if (followUser) {

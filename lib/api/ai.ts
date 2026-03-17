@@ -1,5 +1,5 @@
 import { apiRequest, BACKEND_URL, devLog, devError, devWarn } from './client';
-import { getStoredToken } from '../auth-mobile';
+import { getStoredToken } from '../auth/auth-mobile';
 
 let isStreamingActive = false;
 let currentWebSocket: WebSocket | null = null;
@@ -139,36 +139,6 @@ export async function sendAIMessageStreaming(
   });
 }
 
-export async function sendAIMessage(
-  prompt: string,
-  conversationId?: string
-): Promise<{ success: boolean; response: string; conversationId: string } | null> {
-  return apiRequest('/api/ai/chat', {
-    method: 'POST',
-    body: JSON.stringify({ prompt, conversationId }),
-  });
-}
-
-export async function validateDraftPlan(
-  conversationId: string,
-  draftPlan: Record<string, unknown>,
-  messageId?: string
-): Promise<{ success: boolean; plan?: Record<string, unknown>; error?: string } | null> {
-  return apiRequest('/api/ai/draft-plan/validate', {
-    method: 'POST',
-    body: JSON.stringify({ conversationId, draftPlan, messageId }),
-  });
-}
-
-export async function rejectDraftPlan(
-  conversationId: string,
-  messageId: string
-): Promise<{ success: boolean; message?: string; error?: string } | null> {
-  return apiRequest('/api/ai/draft-plan/reject', {
-    method: 'POST',
-    body: JSON.stringify({ conversationId, messageId }),
-  });
-}
 
 export interface ConversationSummary {
   id: string;
@@ -207,15 +177,6 @@ export async function getConversation(conversationId: string): Promise<{
   return apiRequest(`/api/ai/conversations/${conversationId}`);
 }
 
-export async function createConversation(title?: string): Promise<{
-  success: boolean;
-  conversation: { id: string; title: string | null; createdAt: string; updatedAt: string };
-} | null> {
-  return apiRequest('/api/ai/conversations', {
-    method: 'POST',
-    body: JSON.stringify({ title }),
-  });
-}
 
 export async function deleteConversation(conversationId: string): Promise<{
   success: boolean;

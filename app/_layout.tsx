@@ -8,8 +8,8 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from 'react-native';
 import { Colors } from '@/constants/theme';
-import { AuthProvider } from '@/contexts/AuthContext';
-import { AddingPlaceProvider } from '@/contexts/AddingPlaceContext';
+import { AuthProvider } from '@/lib/auth/AuthContext';
+import { AddingPlaceProvider } from '@/features/places/context/AddingPlaceContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -41,10 +41,7 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="collection-detail" />
-              <Stack.Screen name="create-collection" />
-              <Stack.Screen name="edit-collection" />
-              <Stack.Screen name="edit-collection-places" />
+              <Stack.Screen name="collections" options={{ headerShown: false }} />
             </Stack>
             <StatusBar style="auto" />
           </AddingPlaceProvider>

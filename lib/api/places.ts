@@ -4,7 +4,11 @@ import type {
   PlacesSummaryResponse,
   PlaceDetailsResponse,
   PlaceVideoFeedItem,
-} from '@/types/api';
+  Place,
+  PlaceSummary,
+} from '@/features/places/types';
+
+export type { Place, PlaceSummary };
 
 export async function getUserPlaces(page: number = 1, limit: number = 20): Promise<PlacesResponse | null> {
   return apiRequest<PlacesResponse>(`/api/places?page=${page}&limit=${limit}`);

@@ -1,14 +1,13 @@
 import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, Platform } from 'react-native';
+import { View, StyleSheet, Text, Platform, useColorScheme } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useColorScheme } from 'react-native';
 import { useSearchText } from './_layout';
-import PlacesList from '@/components/places/PlacesList';
-import PlaceFilters from '@/components/places/PlaceFilters';
-import { usePlaces } from '@/hooks/usePlaces';
-import { useAddingPlace } from '@/contexts/AddingPlaceContext';
+import PlacesList from '@/features/places/components/PlacesList';
+import PlaceFilters from '@/features/places/components/PlaceFilters';
+import { usePlaces } from '@/features/places/hooks/usePlaces';
+import { useAddingPlace } from '@/features/places/context/AddingPlaceContext';
 import { Colors } from '@/constants/theme';
 import { matchesTypeFilter } from '@/utils/typeHierarchy';
 

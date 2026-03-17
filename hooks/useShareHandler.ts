@@ -18,6 +18,7 @@ function usePollPendingShareOnActive(isReady: boolean) {
     const scheme = getShareScheme();
     const key = `${scheme}ShareKey`;
     const tryRead = () => {
+      if (!ShareIntentModule) return;
       ShareIntentModule.getShareIntent(`${scheme}://dataUrl=${key}#weburl`);
       ShareIntentModule.getShareIntent(`${scheme}://dataUrl=${key}#text`);
     };
@@ -64,11 +65,11 @@ export function useShareHandler(onUrlReceived: (url: string) => void) {
       // On cherche une URL dans le texte ou directement
       
       // Si c'est directement une URL
-      if (shareIntent.url) {
+      if ('url' in shareIntent && typeof shareIntent.url === 'string') {
         extractedUrl = shareIntent.url;
       }
       // Si c'est du texte qui contient une URL
-      else if (shareIntent.text) {
+      else if ('text' in shareIntent && typeof shareIntent.text === 'string') {
         const text = shareIntent.text;
         // Chercher une URL dans le texte (format http:// ou https://)
         const urlMatch = text.match(/https?:\/\/[^\s]+/);

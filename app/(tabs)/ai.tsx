@@ -9,16 +9,15 @@ import {
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/theme';
 import { getConversation } from '@/lib/api';
-import { exportPlanToCalendar } from '@/lib/calendar-export';
-import ConversationsModal from '@/components/modals/ConversationsModal';
-import AIHeader from '@/components/ai/AIHeader';
-import AIMessage from '@/components/ai/AIMessage';
-import AILoadingIndicator from '@/components/ai/AILoadingIndicator';
-import AIInput from '@/components/ai/AIInput';
-import AIEmptyState from '@/components/ai/AIEmptyState';
+import { exportPlanToCalendar } from '@/lib/services/calendar-export';
+import ConversationsModal from '@/features/ai/components/ConversationsModal';
+import AIHeader from '@/features/ai/components/AIHeader';
+import AIMessage from '@/features/ai/components/AIMessage';
+import AILoadingIndicator from '@/features/ai/components/AILoadingIndicator';
+import AIInput from '@/features/ai/components/AIInput';
+import AIEmptyState from '@/features/ai/components/AIEmptyState';
 import {
   useAIConversation,
   extractDraftPlan,
@@ -26,7 +25,7 @@ import {
   enrichPlanWithPlaceDetails,
   type Message,
   type DraftPlan,
-} from '@/hooks/useAIConversation';
+} from '@/features/ai/hooks/useAIConversation';
 
 const SUGGESTIONS = [
   'Crée un planning pour demain avec mes lieux préférés',
@@ -38,7 +37,6 @@ const SUGGESTIONS = [
 const TAB_BAR_MIN_HEIGHT = 49;
 
 export default function AIPage() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
@@ -61,7 +59,7 @@ export default function AIPage() {
 
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; name: string; uri?: string }>>([]);
+  const [attachedFiles, setAttachedFiles] = useState<{ id: string; name: string; uri?: string }[]>([]);
   const [showConversationsModal, setShowConversationsModal] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
 

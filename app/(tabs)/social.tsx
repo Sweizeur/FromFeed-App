@@ -3,8 +3,8 @@ import { View, StyleSheet, Text, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { Colors } from '@/constants/theme';
-import CollectionsTab from '@/components/social/CollectionsTab';
-import FriendsTab from '@/components/social/FriendsTab';
+import CollectionsTab from '@/features/collections/components/CollectionsTab';
+import FriendsTab from '@/features/social/components/FriendsTab';
 
 const TABS = ['Collections', 'Amis'];
 

@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/lib/auth/AuthContext';
 import { Colors, darkColor } from '@/constants/theme';
 
 // Logo Google officiel (G multicolore)
@@ -52,7 +52,7 @@ function AppleLogo() {
 
 export default function SignUpScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [countryCode, setCountryCode] = useState('+1');
+  const [countryCode] = useState('+1');
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
@@ -132,7 +132,7 @@ export default function SignUpScreen() {
       >
         <View style={styles.content}>
           {/* Titre */}
-          <Text style={[styles.title, { color: theme.text }]}>Let's create your FromFeed account.</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Let&apos;s create your FromFeed account.</Text>
 
           {/* Input téléphone */}
           <View style={styles.phoneContainer}>
