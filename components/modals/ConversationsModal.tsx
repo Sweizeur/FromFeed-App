@@ -120,7 +120,7 @@ export default function ConversationsModal({
     }
   };
 
-  const handleDelete = async (conversationId: string, event: any) => {
+  const handleDelete = async (conversationId: string, event: { stopPropagation: () => void }) => {
     event.stopPropagation();
     
     // Sauvegarder la conversation supprimée pour pouvoir la restaurer en cas d'erreur

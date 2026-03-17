@@ -68,7 +68,9 @@ const PlaceCard = React.memo(function PlaceCard({
   const displayName = place.placeName || place.rawTitle || 'Lieu sans nom';
   const displayAddress = place.googleFormattedAddress || place.address || place.city || 'Adresse non disponible';
   const rating = place.googleRating;
-  const providersRaw = (place as any).providers || (place.provider ? [place.provider] : []);
+  const providersRaw: string[] = ('providers' in place && Array.isArray(place.providers))
+    ? place.providers
+    : (place.provider ? [place.provider] : []);
   const providers = Array.from(new Set(providersRaw)).sort((a: string, b: string) => {
     if (a === 'tiktok' && b !== 'tiktok') return -1;
     if (b === 'tiktok' && a !== 'tiktok') return 1;

@@ -51,8 +51,12 @@ export default function CollectionDetailScreen() {
         getCollection(id),
         getAllPlacesSummary(),
       ]);
+      if (!colRes?.collection || !placesRes?.places) {
+        showError('Impossible de charger la collection');
+        return;
+      }
       setCollectionName(colRes.collection.name);
-      const placeIds = new Set(colRes.collection.places.map((cp: any) => cp.placeId));
+      const placeIds = new Set(colRes.collection.places.map((cp: { placeId: string }) => cp.placeId));
       setCollectionPlaces(placesRes.places.filter((p) => placeIds.has(p.id)));
     } catch {
       showError('Impossible de charger la collection');

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,36 +6,18 @@ import {
   Text,
   Keyboard,
   TouchableWithoutFeedback,
-  AppState,
   useColorScheme,
-  Linking,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const CLUSTER_RED = '#E53935';
-const CLUSTER_SIZE = 32;
-const CLUSTER_FONT_SIZE = 12;
-const DEFAULT_MARKER_EMOJI = '📍';
-const MARKER_EMOJI_SIZE = 28;
-const MARKER_EMOJI_BOX = 40;
 import ClusteredMapView from 'react-native-map-clustering';
 import LinkBottomSheet from '@/components/modals/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
-import { createLinkPreviewTask, getTaskStatus, deletePlace, type Place, type PlaceSummary } from '@/lib/api';
-
-const PENDING_LINK_TASK_ID = '@fromfeed:pendingLinkTaskId';
-const SHARED_PENDING_TASK_KEY = 'fromfeed_pending_task';
-const KEYCHAIN_GROUP = 'group.com.sweizeur.fromfeedapp';
-// Polling avec backoff : 1s, 2s, 4s, 8s, 10s puis 10s (max 10–15s entre deux polls)
-const POLL_INTERVALS = [1000, 2000, 4000, 8000, 10000];
-const POLL_MAX_MS = 5 * 60 * 1000;
+import { deletePlace, type Place, type PlaceSummary } from '@/lib/api';
 import { usePlaces } from '@/hooks/usePlaces';
 import { useMap } from '@/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
-import { useShareHandler } from '@/hooks/useShareHandler';
+import { useLinkProcessing } from '@/hooks/useLinkProcessing';
 import { useAddingPlace } from '@/contexts/AddingPlaceContext';
 import { matchesTypeFilter } from '@/utils/typeHierarchy';
 import { darkColor, Colors } from '@/constants/theme';
@@ -44,18 +26,22 @@ import MapTabHeader from '@/components/navigation/MapTabHeader';
 import LinkLoadBanner from '@/components/navigation/LinkLoadBanner';
 import { router } from 'expo-router';
 
+const CLUSTER_RED = '#E53935';
+const CLUSTER_SIZE = 32;
+const CLUSTER_FONT_SIZE = 12;
+const DEFAULT_MARKER_EMOJI = '📍';
+const MARKER_EMOJI_SIZE = 28;
+const MARKER_EMOJI_BOX = 40;
+
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = Colors[isDark ? 'dark' : 'light'];
 
-  // Hooks personnalisés
   const {
     placesSummary,
     selectedPlace,
-    placesListKey,
-    refreshing,
     refreshPlaces,
     loadPlaceDetails,
     clearSelectedPlace,
@@ -72,22 +58,25 @@ export default function MapScreen() {
     stopWatchingUser,
     isProgrammaticChange,
   } = useMap();
+
   const { toast, showSuccess, showError, hideToast } = useToast();
-  const { isAddingPlace, setAddingPlace, linkLoadStatus, setLinkLoadStatus, setSuccessMessage, successMessage, bumpPlacesVersion } = useAddingPlace();
+  const { isAddingPlace, setAddingPlace, linkLoadStatus, setLinkLoadStatus, successMessage, setSuccessMessage } = useAddingPlace();
 
-  // Suivi utilisateur : carte recentrée à chaque déplacement ; désactivé quand l'utilisateur déplace la carte
+  const onPlaceSaved = useCallback(async () => {
+    await refreshPlaces(true, true);
+  }, [refreshPlaces]);
+
+  const {
+    processingUrl,
+    handleTaskCreated,
+    setProcessingUrl,
+  } = useLinkProcessing({ onPlaceSaved });
+
   const [followUser, setFollowUser] = useState(false);
-
-  // État local pour l'UI
   const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
   const [linkInput, setLinkInput] = useState('');
-  const [processingUrl, setProcessingUrl] = useState<string | null>(null);
-  const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
-  const processingUrlRef = useRef<string | null>(null);
-  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollStartRef = useRef<number>(0);
 
-  // Filtres
+  // Filters
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
 
@@ -96,260 +85,29 @@ export default function MapScreen() {
     setSelectedType(null);
   };
 
-  const handlePlacePress = React.useCallback(async (place: Place | PlaceSummary) => {
-    if ('provider' in place && !('createdAt' in place)) {
-      try {
-        await loadPlaceDetails(place.id);
-      } catch (error) {
-        __DEV__ && console.error('[Map] Erreur lors du chargement des détails:', error);
-        showError('Impossible de charger les détails du lieu.');
-        return;
-      }
-    } else {
-      setSelectedPlace(place as Place);
-    }
-    await animateToPlace(place);
-  }, [loadPlaceDetails, setSelectedPlace, animateToPlace]);
-
-  const clearPendingTask = useCallback(() => {
-    setPendingTaskId(null);
-    setAddingPlace(false);
-    setProcessingUrl(null);
-    processingUrlRef.current = null;
-    AsyncStorage.removeItem(PENDING_LINK_TASK_ID);
-    if (pollTimeoutRef.current) {
-      clearTimeout(pollTimeoutRef.current);
-      pollTimeoutRef.current = null;
-    }
-  }, [setAddingPlace]);
-
-  const handleSaveLink = useCallback(async (result: any) => {
-    if (result && 'processing' in result && result.processing === true) {
-      setAddingPlace(true);
-      return;
-    }
-    if (!result?.placeId) {
-      showError('Le lieu n\'a pas pu être ajouté. Les informations extraites ne correspondent pas aux données Google Places.');
-      setAddingPlace(false);
-      setLinkLoadStatus('idle');
-      return;
-    }
-    const placeName = result.llm?.placeName || result.google?.name || result.place?.name || 'Lieu';
-    const city = result.llm?.city || result.google?.formatted_address?.split(',')[0] || result.place?.city;
-    const msg = city
-      ? `${placeName} ajouté dans ${city} !`
-      : `${placeName} ajouté !`;
-    setSuccessMessage(msg);
-    await refreshPlaces(true, true);
-    bumpPlacesVersion();
-    setProcessingUrl(null);
-    processingUrlRef.current = null;
-  }, [showError, refreshPlaces, setAddingPlace, setLinkLoadStatus, setSuccessMessage, bumpPlacesVersion]);
-
-  const checkTaskStatus = useCallback(async (taskId: string) => {
-    const statusRes = await getTaskStatus(taskId);
-    if (!statusRes) return false;
-    if (statusRes.status === 'done' && statusRes.result) {
-      setLinkLoadStatus('success');
-      await handleSaveLink(statusRes.result);
-      clearPendingTask();
-      return true;
-    }
-    if (statusRes.status === 'failed' || statusRes.status === 'expired') {
-      showError(statusRes.error || 'L\'analyse du lien a échoué.');
-      setLinkLoadStatus('idle');
-      clearPendingTask();
-      return true;
-    }
-    return false;
-  }, [handleSaveLink, clearPendingTask, showError, setLinkLoadStatus]);
-
-  const scheduleNextPoll = useCallback((taskId: string, attempt: number) => {
-    if (pollTimeoutRef.current) return;
-    const elapsed = Date.now() - pollStartRef.current;
-    if (elapsed >= POLL_MAX_MS) {
-      showError('L\'analyse prend trop de temps. Réessayez plus tard.');
-      setLinkLoadStatus('idle');
-      clearPendingTask();
-      return;
-    }
-    const delay = attempt < POLL_INTERVALS.length ? POLL_INTERVALS[attempt] : 10000;
-    pollTimeoutRef.current = setTimeout(async () => {
-      pollTimeoutRef.current = null;
-      const done = await checkTaskStatus(taskId);
-      if (!done) scheduleNextPoll(taskId, attempt + 1);
-    }, delay);
-  }, [checkTaskStatus, clearPendingTask, showError, setLinkLoadStatus]);
-
-  const handleTaskCreated = useCallback((taskId: string) => {
-    setPendingTaskId(taskId);
-    setAddingPlace(true);
-    setLinkLoadStatus('loading');
-    setProcessingUrl('En cours...');
-    processingUrlRef.current = 'pending';
-    AsyncStorage.setItem(PENDING_LINK_TASK_ID, taskId);
-    pollStartRef.current = Date.now();
-    scheduleNextPoll(taskId, 0);
-  }, [scheduleNextPoll, setAddingPlace, setLinkLoadStatus]);
-
-  useEffect(() => {
-    if (!pendingTaskId) return;
-    return () => {
-      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
-    };
-  }, [pendingTaskId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let stored = await AsyncStorage.getItem(PENDING_LINK_TASK_ID);
-
-      // Also check shared keychain (written by the share extension)
-      if (!stored) {
+  const handlePlacePress = useCallback(
+    async (place: Place | PlaceSummary) => {
+      if ('provider' in place && !('createdAt' in place)) {
         try {
-          const shared = await SecureStore.getItemAsync(SHARED_PENDING_TASK_KEY, {
-            accessGroup: KEYCHAIN_GROUP,
-          });
-          if (shared) {
-            stored = shared;
-            await AsyncStorage.setItem(PENDING_LINK_TASK_ID, shared);
-            await SecureStore.deleteItemAsync(SHARED_PENDING_TASK_KEY, {
-              accessGroup: KEYCHAIN_GROUP,
-            });
-          }
-        } catch {}
-      }
-
-      if (cancelled || !stored) return;
-      setPendingTaskId(stored);
-      setAddingPlace(true);
-      setLinkLoadStatus('loading');
-      setProcessingUrl('En cours...');
-      processingUrlRef.current = 'pending';
-      pollStartRef.current = Date.now();
-      scheduleNextPoll(stored, 0);
-    })();
-    return () => { cancelled = true; };
-  }, [scheduleNextPoll, setAddingPlace, setLinkLoadStatus]);
-
-  const handleSharedUrl = React.useCallback(async (url: string) => {
-    if (processingUrlRef.current === url) return;
-    try {
-      processingUrlRef.current = url;
-      const response = await createLinkPreviewTask(url);
-      if (response?.taskId) {
-        setPendingTaskId(response.taskId);
-        setAddingPlace(true);
-        setLinkLoadStatus('loading');
-        setProcessingUrl(url);
-        AsyncStorage.setItem(PENDING_LINK_TASK_ID, response.taskId);
-        pollStartRef.current = Date.now();
-        scheduleNextPoll(response.taskId, 0);
+          await loadPlaceDetails(place.id);
+        } catch {
+          showError('Impossible de charger les détails du lieu.');
+          return;
+        }
       } else {
-        showError('Impossible de lancer l\'analyse du lien partagé.');
-        processingUrlRef.current = null;
+        setSelectedPlace(place as Place);
       }
-    } catch (error: any) {
-      const isNetworkError = error?.message?.includes('Network request failed') ||
-        error?.message?.includes('Aborted') || error?.name === 'AbortError';
-      if (!isNetworkError) {
-        console.error('[Map] Erreur lors du traitement automatique du lien partagé:', error);
-        showError(error?.message || 'Une erreur est survenue lors de l\'analyse du lien.');
-      }
-      processingUrlRef.current = null;
-      setLinkLoadStatus('idle');
-    }
-  }, [showError, scheduleNextPoll, setAddingPlace, setLinkLoadStatus]);
-
-  useShareHandler(handleSharedUrl);
-
-  // Quand l’app s’ouvre depuis la Share Extension (openHostApp avec ?shareUrl=...)
-  useEffect(() => {
-    const handleUrl = (url: string | null) => {
-      if (!url) return;
-      try {
-        const parsed = new URL(url);
-        const shareUrl = parsed.searchParams.get('shareUrl');
-        if (shareUrl) {
-          handleSharedUrl(decodeURIComponent(shareUrl));
-        }
-      } catch (_) {}
-    };
-
-    Linking.getInitialURL().then(handleUrl);
-    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
-    return () => sub.remove();
-  }, [handleSharedUrl]);
-
-  const isRefreshingOnAppStateRef = useRef(false);
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextAppState) => {
-      if (nextAppState !== 'active') return;
-
-      // Check shared keychain for taskId written by the share extension
-      let taskId = pendingTaskId ?? (await AsyncStorage.getItem(PENDING_LINK_TASK_ID));
-      if (!taskId) {
-        try {
-          const shared = await SecureStore.getItemAsync(SHARED_PENDING_TASK_KEY, {
-            accessGroup: KEYCHAIN_GROUP,
-          });
-          if (shared) {
-            taskId = shared;
-            await AsyncStorage.setItem(PENDING_LINK_TASK_ID, shared);
-            await SecureStore.deleteItemAsync(SHARED_PENDING_TASK_KEY, {
-              accessGroup: KEYCHAIN_GROUP,
-            });
-          }
-        } catch {}
-      }
-
-      if (taskId) {
-        if (isRefreshingOnAppStateRef.current) return;
-        isRefreshingOnAppStateRef.current = true;
-        try {
-          const done = await checkTaskStatus(taskId);
-          if (done) {
-            await refreshPlaces(true, true);
-          } else {
-            // Encore en cours → relancer le polling
-            setPendingTaskId(taskId);
-            setAddingPlace(true);
-            setLinkLoadStatus('loading');
-            setProcessingUrl('En cours...');
-            pollStartRef.current = Date.now();
-            scheduleNextPoll(taskId, 0);
-          }
-        } catch (_) {}
-        finally {
-          setTimeout(() => { isRefreshingOnAppStateRef.current = false; }, 1000);
-        }
-        return;
-      }
-      if (isAddingPlace && processingUrl) {
-        if (isRefreshingOnAppStateRef.current) return;
-        isRefreshingOnAppStateRef.current = true;
-        try {
-          await refreshPlaces(true, true);
-        } catch (_) {}
-        finally {
-          setTimeout(() => { isRefreshingOnAppStateRef.current = false; }, 1000);
-        }
-      }
-    });
-    return () => subscription.remove();
-  }, [pendingTaskId, isAddingPlace, processingUrl, refreshPlaces, checkTaskStatus, scheduleNextPoll, setAddingPlace, setLinkLoadStatus]);
-
-  const handleLinkError = (error: Error) => {
-    showError(error.message || 'Une erreur est survenue lors de l\'analyse du lien.');
-  };
+      await animateToPlace(place);
+    },
+    [loadPlaceDetails, setSelectedPlace, animateToPlace, showError]
+  );
 
   const handleDeletePlaces = async (placeIds: string[]) => {
     try {
-      await Promise.all(placeIds.map(placeId => deletePlace(placeId)));
+      await Promise.all(placeIds.map((id) => deletePlace(id)));
       showSuccess(`${placeIds.length} lieu${placeIds.length > 1 ? 'x' : ''} supprimé${placeIds.length > 1 ? 's' : ''} avec succès`);
       await refreshPlaces(false);
-    } catch (error) {
-      __DEV__ && console.error('[Map] Erreur lors de la suppression:', error);
+    } catch {
       showError('Une erreur est survenue lors de la suppression des lieux.');
     }
   };
@@ -393,89 +151,90 @@ export default function MapScreen() {
         <LinkLoadBanner
           status={linkLoadStatus}
           successMessage={successMessage}
-          onSuccessDismiss={() => { setLinkLoadStatus('idle'); setSuccessMessage(null); }}
+          onSuccessDismiss={() => {
+            setLinkLoadStatus('idle');
+            setSuccessMessage(null);
+          }}
         />
         <View style={styles.mapContainer}>
-            {loadingLocation && (
-              <View style={styles.mapLoading}>
-                <ActivityIndicator size="large" color={darkColor} />
-              </View>
-            )}
-            {!loadingLocation && region && (
-              <ClusteredMapView
-                ref={mapViewRef}
-                style={StyleSheet.absoluteFillObject}
-                initialRegion={region}
-                showsUserLocation
-                onRegionChangeComplete={handleRegionChangeComplete}
-                clusterColor={CLUSTER_RED}
-                clusterTextColor="#FFFFFF"
-                renderCluster={({ id, geometry, properties, onPress }) => (
+          {loadingLocation && (
+            <View style={styles.mapLoading}>
+              <ActivityIndicator size="large" color={darkColor} />
+            </View>
+          )}
+          {!loadingLocation && region && (
+            <ClusteredMapView
+              ref={mapViewRef}
+              style={StyleSheet.absoluteFillObject}
+              initialRegion={region}
+              showsUserLocation
+              onRegionChangeComplete={handleRegionChangeComplete}
+              clusterColor={CLUSTER_RED}
+              clusterTextColor="#FFFFFF"
+              renderCluster={({ id, geometry, properties, onPress }) => (
+                <Marker
+                  key={`cluster-${id}-${properties.point_count}`}
+                  coordinate={{
+                    latitude: geometry.coordinates[1],
+                    longitude: geometry.coordinates[0],
+                  }}
+                  onPress={onPress}
+                >
+                  <View style={clusterStyles.bubble}>
+                    <Text style={clusterStyles.count} numberOfLines={1}>
+                      {properties.point_count}
+                    </Text>
+                  </View>
+                </Marker>
+              )}
+            >
+              {filteredPlaces
+                .filter((p) => p?.id && p.lat != null && p.lon != null)
+                .map((place) => (
                   <Marker
-                    key={`cluster-${id}-${properties.point_count}`}
-                    coordinate={{
-                      latitude: geometry.coordinates[1],
-                      longitude: geometry.coordinates[0],
-                    }}
-                    onPress={onPress}
+                    key={place.id}
+                    coordinate={{ latitude: place.lat!, longitude: place.lon! }}
+                    title={place.placeName || place.rawTitle || 'Lieu'}
+                    description={place.googleFormattedAddress || place.address || undefined}
+                    onPress={() => handlePlacePress(place)}
+                    tracksViewChanges={false}
                   >
-                    <View style={clusterStyles.bubble}>
-                      <Text style={clusterStyles.count} numberOfLines={1}>
-                        {properties.point_count}
-                      </Text>
-                    </View>
-                  </Marker>
-                )}
-              >
-                {filteredPlaces
-                  .filter((p) => p?.id && p.lat != null && p.lon != null)
-                  .map((place) => (
-                    <Marker
-                      key={place.id}
-                      coordinate={{ latitude: place.lat!, longitude: place.lon! }}
-                      title={place.placeName || place.rawTitle || 'Lieu'}
-                      description={place.googleFormattedAddress || place.address || undefined}
-                      onPress={() => handlePlacePress(place)}
-                      tracksViewChanges={false}
-                    >
                     <View
                       style={[
                         markerStyles.emojiBox,
                         {
                           backgroundColor: theme.surface,
                           borderColor: theme.border,
-                          shadowColor: isDark ? '#000' : '#000',
+                          shadowColor: '#000',
                         },
                       ]}
                     >
-                        <Text style={markerStyles.emoji}>
-                          {place.markerEmoji ?? DEFAULT_MARKER_EMOJI}
-                        </Text>
-                      </View>
-                    </Marker>
-                  ))}
-              </ClusteredMapView>
-            )}
-            {!loadingLocation && !region && (
-              <View style={styles.mapLoading}>
-                <ActivityIndicator size="large" color={darkColor} />
-              </View>
-            )}
-            {!loadingLocation && region && (
-              <View style={[styles.centerUserButton, { bottom: insets.bottom + 72 }]} pointerEvents="box-none">
-                <GlassButton
-                  icon="locate"
-                  onPress={handleCenterUser}
-                  active={followUser}
-                  activeTint="#0a7ea4"
-                  activeTextColor="#fff"
-                  accessibilityLabel={followUser ? 'Ne plus suivre ma position' : 'Centrer et suivre ma position'}
-                  textColor={theme.text}
-                  backgroundColor={theme.background}
-                />
-              </View>
-            )}
-          </View>
+                      <Text style={markerStyles.emoji}>{place.markerEmoji ?? DEFAULT_MARKER_EMOJI}</Text>
+                    </View>
+                  </Marker>
+                ))}
+            </ClusteredMapView>
+          )}
+          {!loadingLocation && !region && (
+            <View style={styles.mapLoading}>
+              <ActivityIndicator size="large" color={darkColor} />
+            </View>
+          )}
+          {!loadingLocation && region && (
+            <View style={[styles.centerUserButton, { bottom: insets.bottom + 72 }]} pointerEvents="box-none">
+              <GlassButton
+                icon="locate"
+                onPress={handleCenterUser}
+                active={followUser}
+                activeTint="#0a7ea4"
+                activeTextColor="#fff"
+                accessibilityLabel={followUser ? 'Ne plus suivre ma position' : 'Centrer et suivre ma position'}
+                textColor={theme.text}
+                backgroundColor={theme.background}
+              />
+            </View>
+          )}
+        </View>
 
         <LinkBottomSheet
           visible={isLinkModalVisible}
@@ -493,13 +252,15 @@ export default function MapScreen() {
             if (linkInput.trim()) setProcessingUrl(linkInput.trim());
           }}
           onError={(error) => {
-            const isNetworkError = error?.message?.includes('Network request failed') ||
-              error?.message?.includes('Aborted') || error?.name === 'AbortError';
+            const isNetworkError =
+              error?.message?.includes('Network request failed') ||
+              error?.message?.includes('Aborted') ||
+              error?.name === 'AbortError';
             if (!isNetworkError) {
               setAddingPlace(false);
               setLinkLoadStatus('idle');
               setProcessingUrl(null);
-              handleLinkError(error);
+              showError(error.message || "Une erreur est survenue lors de l'analyse du lien.");
             }
           }}
         />
@@ -514,11 +275,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   mapContainer: { flex: 1, position: 'relative', width: '100%' },
   mapLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  centerUserButton: {
-    position: 'absolute',
-    right: 16,
-    zIndex: 10,
-  },
+  centerUserButton: { position: 'absolute', right: 16, zIndex: 10 },
 });
 
 const clusterStyles = StyleSheet.create({
@@ -530,11 +287,7 @@ const clusterStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  count: {
-    color: '#FFFFFF',
-    fontSize: CLUSTER_FONT_SIZE,
-    fontWeight: '600',
-  },
+  count: { color: '#FFFFFF', fontSize: CLUSTER_FONT_SIZE, fontWeight: '600' },
 });
 
 const markerStyles = StyleSheet.create({
@@ -545,15 +298,10 @@ const markerStyles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: MARKER_EMOJI_BOX / 2,
     borderWidth: 2,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
   },
-  emoji: {
-    fontSize: MARKER_EMOJI_SIZE,
-    lineHeight: MARKER_EMOJI_BOX,
-    textAlign: 'center',
-  },
+  emoji: { fontSize: MARKER_EMOJI_SIZE, lineHeight: MARKER_EMOJI_BOX, textAlign: 'center' },
 });

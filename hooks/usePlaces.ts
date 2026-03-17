@@ -143,11 +143,11 @@ export function usePlaces() {
       console.log('[usePlaces] Rafraîchissement des places...', skipCache ? '(skip cache)' : '(avec cache)', silent ? '(silent)' : '');
       
       const response = await getAllPlacesSummary(skipCache);
-      const validPlaces = filterValidPlaces(response.places);
+      const places = response?.places ?? [];
+      const validPlaces = filterValidPlaces(places);
       
-      // Mettre à jour le cache client
       clientCache = {
-        data: response.places,
+        data: places,
         timestamp: Date.now(),
       };
       
@@ -172,7 +172,9 @@ export function usePlaces() {
     try {
       console.log('[usePlaces] Chargement des détails complets pour:', placeId);
       const response = await getPlaceDetails(placeId);
-      setSelectedPlace(response.place);
+      if (response?.place) {
+        setSelectedPlace(response.place);
+      }
     } catch (err) {
       __DEV__ && console.error('[usePlaces] Erreur lors du chargement des détails:', err);
       // Erreur silencieuse - l'utilisateur ne doit pas voir les erreurs techniques

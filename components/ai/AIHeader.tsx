@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated from 'react-native-reanimated';
+import Animated, { type AnimatedStyle } from 'react-native-reanimated';
 import { Colors } from '@/constants/theme';
+import type { ViewStyle } from 'react-native';
 
 interface AIHeaderProps {
   conversationTitle: string | null;
-  titleAnimatedStyle: any;
+  titleAnimatedStyle: AnimatedStyle<ViewStyle>;
   onShowConversations: () => void;
   hasMessages: boolean;
   onNewMessage: () => void;

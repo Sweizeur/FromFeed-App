@@ -85,7 +85,7 @@ export default function PlacesScreen() {
   }, [placesSummary, searchText, selectedCategory, selectedType]);
 
   const handlePlacePress = useCallback(
-    (place: any) => {
+    (_place: { id: string }) => {
       // Pour l'instant on renvoie juste vers la carte centrée sur ce lieu
       // Tu pourras adapter si tu veux un détail dédié
       router.push('/(tabs)/map');

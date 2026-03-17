@@ -49,7 +49,8 @@ export default function EditCollectionPlacesScreen() {
           getCollection(id),
           getAllPlacesSummary(),
         ]);
-        const ids = new Set(colRes.collection.places.map((cp: any) => cp.placeId));
+        if (!colRes?.collection || !placesRes?.places) return;
+        const ids = new Set(colRes.collection.places.map((cp: { placeId: string }) => cp.placeId));
         setInitialIds(ids);
         setSelectedIds(new Set(ids));
         setPlaces(placesRes.places);

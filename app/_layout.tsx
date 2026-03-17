@@ -6,8 +6,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useColorScheme } from 'react-native';
 import { Colors } from '@/constants/theme';
+import { AuthProvider } from '@/contexts/AuthContext';
 import { AddingPlaceProvider } from '@/contexts/AddingPlaceContext';
 
 export default function RootLayout() {
@@ -35,12 +36,11 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider value={navigationTheme}>
+          <AuthProvider>
           <AddingPlaceProvider>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="groups" />
-              <Stack.Screen name="group-detail" />
               <Stack.Screen name="collection-detail" />
               <Stack.Screen name="create-collection" />
               <Stack.Screen name="edit-collection" />
@@ -48,6 +48,7 @@ export default function RootLayout() {
             </Stack>
             <StatusBar style="auto" />
           </AddingPlaceProvider>
+          </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

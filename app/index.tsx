@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
-import { getStoredToken, getStoredUser, refreshSession } from '@/lib/auth-mobile';
+import { useAuth } from '@/contexts/AuthContext';
 import { Colors, darkColor } from '@/constants/theme';
 
 // Logo Google officiel (G multicolore)
@@ -54,49 +54,18 @@ export default function SignUpScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [countryCode, setCountryCode] = useState('+1');
   const [loading, setLoading] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const router = useRouter();
+  const { isAuthenticated, loading: checkingAuth, signIn } = useAuth();
   const scheme = useColorScheme() ?? 'light';
   const isDark = scheme === 'dark';
   const theme = Colors[isDark ? 'dark' : 'light'];
 
-  // Vérifier si l'utilisateur est déjà connecté au démarrage
   useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  async function checkAuthStatus() {
-    try {
-      const storedToken = await getStoredToken();
-      const storedUser = await getStoredUser();
-
-      if (storedToken && storedUser) {
-        // Vérifier et rafraîchir la session si nécessaire
-        const refreshed = await refreshSession();
-        if (refreshed) {
-          // Session valide, rediriger vers home
-          router.replace('/(tabs)/map');
-          return;
-        } else {
-          // Session expirée ou erreur réseau, on reste sur l'écran de connexion
-          console.log('Session expirée ou erreur réseau, affichage de l\'écran de connexion');
-        }
-      }
-    } catch (error) {
-      // Gérer les erreurs réseau de manière plus gracieuse
-      if (error instanceof TypeError && error.message === 'Network request failed') {
-        __DEV__ && console.error('Erreur réseau lors de la vérification de l\'authentification:', error);
-        __DEV__ && console.error('Vérifiez que le backend est accessible et que ngrok est actif');
-        // Ne pas bloquer l'application en cas d'erreur réseau
-        // L'utilisateur pourra toujours essayer de se connecter
-      } else {
-        __DEV__ && console.error('Erreur lors de la vérification de l\'authentification:', error);
-      }
-    } finally {
-      setCheckingAuth(false);
+    if (!checkingAuth && isAuthenticated) {
+      router.replace('/(tabs)/map');
     }
-  }
+  }, [checkingAuth, isAuthenticated, router]);
 
   const handlePhoneSignUp = () => {
     if (!phoneNumber || phoneNumber.length < 6) {
@@ -114,35 +83,25 @@ export default function SignUpScreen() {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      const { signInWithGoogle } = await import('@/lib/auth-mobile');
-      const result = await signInWithGoogle();
-      
-      if (result.success && result.data) {
-        // Navigation vers la page home après connexion réussie
+      const result = await signIn();
+
+      if (result.success) {
         router.replace('/(tabs)/map');
+      } else if (result.errorCode === 'RATE_LIMIT') {
+        Alert.alert(
+          'Trop de tentatives',
+          result.errorMessage || 'Veuillez patienter quelques instants avant de réessayer.',
+          [{ text: 'OK' }]
+        );
       } else {
-        // Gérer les erreurs spécifiques
-        if (result.errorCode === 'RATE_LIMIT') {
-          Alert.alert(
-            'Trop de tentatives',
-            result.errorMessage || 'Vous avez effectué trop de tentatives de connexion. Veuillez patienter quelques instants avant de réessayer.',
-            [{ text: 'OK' }]
-          );
-        } else {
-          Alert.alert(
-            'Erreur de connexion',
-            result.errorMessage || 'Une erreur est survenue lors de la connexion avec Google. Veuillez réessayer.',
-            [{ text: 'OK' }]
-          );
-        }
+        Alert.alert(
+          'Erreur de connexion',
+          result.errorMessage || 'Une erreur est survenue lors de la connexion avec Google.',
+          [{ text: 'OK' }]
+        );
       }
-    } catch (error: any) {
-      __DEV__ && console.error('Erreur lors de la connexion Google:', error);
-      Alert.alert(
-        'Erreur de connexion',
-        'Une erreur est survenue lors de la connexion avec Google. Veuillez réessayer.',
-        [{ text: 'OK' }]
-      );
+    } catch {
+      Alert.alert('Erreur de connexion', 'Une erreur est survenue. Veuillez réessayer.', [{ text: 'OK' }]);
     } finally {
       setLoading(false);
     }

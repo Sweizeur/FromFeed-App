@@ -245,8 +245,8 @@ export default function LinkBottomSheet({
                   } else {
                     if (onError) onError(new Error('Impossible de lancer l\'analyse du lien.'));
                   }
-                } catch (err: any) {
-                  const errorMessage = err.message || 'Une erreur est survenue lors de l\'analyse du lien.';
+                } catch (err: unknown) {
+                  const errorMessage = (err instanceof Error ? err.message : null) || 'Une erreur est survenue lors de l\'analyse du lien.';
                   if (onError) onError(new Error(errorMessage));
                 } finally {
                   setIsLoading(false);
