@@ -56,8 +56,43 @@
       ],
       "@react-native-community/datetimepicker",
       ["expo-calendar", { "calendarPermission": "FromFeed ajoute vos sorties à votre calendrier." }],
-      "./plugins/with-share-extension-modal.js",
-      "expo-share-intent",
+      ["expo-share-intent", { "disableIOS": true }],
+      [
+        "expo-share-extension",
+        {
+          "activationRules": [
+            { "type": "url", "max": 1 },
+            { "type": "text" }
+          ],
+          "excludedPackages": [
+            "expo-dev-client",
+            "expo-splash-screen",
+            "expo-updates",
+            "expo-font",
+            "expo-auth-session",
+            "expo-crypto",
+            "expo-calendar",
+            "expo-clipboard",
+            "expo-location",
+            "expo-web-browser",
+            "expo-image",
+            "expo-haptics",
+            "expo-linear-gradient",
+            "expo-glass-effect",
+            "expo-blur",
+            "expo-linking",
+            "expo-share-intent",
+            "expo-symbols",
+            "expo-status-bar",
+            "expo-system-ui",
+            "@expo/vector-icons",
+            "@react-native-community/datetimepicker",
+            "@react-native-menu/menu",
+            "@react-native-picker/picker",
+            "@react-native-segmented-control/segmented-control"
+          ]
+        }
+      ],
       "./plugins/with-ats-config.js",
       "./plugins/with-share-extension.js"
     ],

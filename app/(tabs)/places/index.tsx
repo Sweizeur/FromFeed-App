@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, Platform } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
@@ -54,7 +54,14 @@ export default function PlacesScreen() {
     refreshing,
     refreshPlaces,
   } = usePlaces();
-  const { isAddingPlace } = useAddingPlace();
+  const { isAddingPlace, placesVersion } = useAddingPlace();
+
+  const initialVersion = useRef(placesVersion);
+  useEffect(() => {
+    if (placesVersion > initialVersion.current) {
+      refreshPlaces(true, true);
+    }
+  }, [placesVersion, refreshPlaces]);
 
   const filteredPlaces = useMemo(() => {
     return placesSummary.filter((place) => {

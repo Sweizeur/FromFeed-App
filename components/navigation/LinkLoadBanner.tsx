@@ -11,10 +11,11 @@ const HEADER_CONTENT_HEIGHT = 60;
 
 interface LinkLoadBannerProps {
   status: LinkLoadStatus;
+  successMessage?: string | null;
   onSuccessDismiss?: () => void;
 }
 
-export default function LinkLoadBanner({ status, onSuccessDismiss }: LinkLoadBannerProps) {
+export default function LinkLoadBanner({ status, successMessage, onSuccessDismiss }: LinkLoadBannerProps) {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -78,7 +79,7 @@ export default function LinkLoadBanner({ status, onSuccessDismiss }: LinkLoadBan
               <View style={[styles.iconWrap, { backgroundColor: isDark ? 'rgba(52,199,89,0.25)' : 'rgba(52,199,89,0.2)' }]}>
                 <Ionicons name="checkmark-circle" size={22} color="#34C759" />
               </View>
-              <Text style={[styles.text, { color: theme.text }]}>Lieu ajouté !</Text>
+              <Text style={[styles.text, { color: theme.text }]} numberOfLines={2}>{successMessage || 'Lieu ajouté !'}</Text>
             </>
           ) : (
             <>

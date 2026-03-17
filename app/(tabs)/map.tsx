@@ -11,6 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -26,6 +27,8 @@ import Toast from '@/components/common/Toast';
 import { createLinkPreviewTask, getTaskStatus, deletePlace, type Place, type PlaceSummary } from '@/lib/api';
 
 const PENDING_LINK_TASK_ID = '@fromfeed:pendingLinkTaskId';
+const SHARED_PENDING_TASK_KEY = 'fromfeed_pending_task';
+const KEYCHAIN_GROUP = 'group.com.sweizeur.fromfeedapp';
 // Polling avec backoff : 1s, 2s, 4s, 8s, 10s puis 10s (max 10–15s entre deux polls)
 const POLL_INTERVALS = [1000, 2000, 4000, 8000, 10000];
 const POLL_MAX_MS = 5 * 60 * 1000;
@@ -70,7 +73,7 @@ export default function MapScreen() {
     isProgrammaticChange,
   } = useMap();
   const { toast, showSuccess, showError, hideToast } = useToast();
-  const { isAddingPlace, setAddingPlace, linkLoadStatus, setLinkLoadStatus } = useAddingPlace();
+  const { isAddingPlace, setAddingPlace, linkLoadStatus, setLinkLoadStatus, setSuccessMessage, successMessage, bumpPlacesVersion } = useAddingPlace();
 
   // Suivi utilisateur : carte recentrée à chaque déplacement ; désactivé quand l'utilisateur déplace la carte
   const [followUser, setFollowUser] = useState(false);
@@ -122,7 +125,6 @@ export default function MapScreen() {
 
   const handleSaveLink = useCallback(async (result: any) => {
     if (result && 'processing' in result && result.processing === true) {
-      showSuccess('Le lien est en cours de traitement. Le lieu sera ajouté automatiquement une fois l\'analyse terminée.');
       setAddingPlace(true);
       return;
     }
@@ -134,14 +136,15 @@ export default function MapScreen() {
     }
     const placeName = result.llm?.placeName || result.google?.name || result.place?.name || 'Lieu';
     const city = result.llm?.city || result.google?.formatted_address?.split(',')[0] || result.place?.city;
-    const successMessage = city
-      ? `Bravo, ${placeName} a été ajouté dans ${city}`
-      : `Bravo, ${placeName} a été ajouté dans vos lieux sauvegardés`;
-    showSuccess(successMessage);
+    const msg = city
+      ? `${placeName} ajouté dans ${city} !`
+      : `${placeName} ajouté !`;
+    setSuccessMessage(msg);
     await refreshPlaces(true, true);
+    bumpPlacesVersion();
     setProcessingUrl(null);
     processingUrlRef.current = null;
-  }, [showSuccess, showError, refreshPlaces, setAddingPlace, setLinkLoadStatus]);
+  }, [showError, refreshPlaces, setAddingPlace, setLinkLoadStatus, setSuccessMessage, bumpPlacesVersion]);
 
   const checkTaskStatus = useCallback(async (taskId: string) => {
     const statusRes = await getTaskStatus(taskId);
@@ -199,7 +202,24 @@ export default function MapScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const stored = await AsyncStorage.getItem(PENDING_LINK_TASK_ID);
+      let stored = await AsyncStorage.getItem(PENDING_LINK_TASK_ID);
+
+      // Also check shared keychain (written by the share extension)
+      if (!stored) {
+        try {
+          const shared = await SecureStore.getItemAsync(SHARED_PENDING_TASK_KEY, {
+            accessGroup: KEYCHAIN_GROUP,
+          });
+          if (shared) {
+            stored = shared;
+            await AsyncStorage.setItem(PENDING_LINK_TASK_ID, shared);
+            await SecureStore.deleteItemAsync(SHARED_PENDING_TASK_KEY, {
+              accessGroup: KEYCHAIN_GROUP,
+            });
+          }
+        } catch {}
+      }
+
       if (cancelled || !stored) return;
       setPendingTaskId(stored);
       setAddingPlace(true);
@@ -265,7 +285,24 @@ export default function MapScreen() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState !== 'active') return;
-      const taskId = pendingTaskId ?? (await AsyncStorage.getItem(PENDING_LINK_TASK_ID));
+
+      // Check shared keychain for taskId written by the share extension
+      let taskId = pendingTaskId ?? (await AsyncStorage.getItem(PENDING_LINK_TASK_ID));
+      if (!taskId) {
+        try {
+          const shared = await SecureStore.getItemAsync(SHARED_PENDING_TASK_KEY, {
+            accessGroup: KEYCHAIN_GROUP,
+          });
+          if (shared) {
+            taskId = shared;
+            await AsyncStorage.setItem(PENDING_LINK_TASK_ID, shared);
+            await SecureStore.deleteItemAsync(SHARED_PENDING_TASK_KEY, {
+              accessGroup: KEYCHAIN_GROUP,
+            });
+          }
+        } catch {}
+      }
+
       if (taskId) {
         if (isRefreshingOnAppStateRef.current) return;
         isRefreshingOnAppStateRef.current = true;
@@ -355,7 +392,8 @@ export default function MapScreen() {
         />
         <LinkLoadBanner
           status={linkLoadStatus}
-          onSuccessDismiss={() => setLinkLoadStatus('idle')}
+          successMessage={successMessage}
+          onSuccessDismiss={() => { setLinkLoadStatus('idle'); setSuccessMessage(null); }}
         />
         <View style={styles.mapContainer}>
             {loadingLocation && (
