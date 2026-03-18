@@ -30,7 +30,7 @@ import { placesToGeoJSON } from '@/features/places/utils/placesToGeoJSON';
 
 const CLUSTER_RED = '#E53935';
 const MAPBOX_STYLE_LIGHT = 'mapbox://styles/mapbox/standard';
-const MAPBOX_STYLE_DARK = 'mapbox://styles/mapbox/navigation-night-v1';
+const MAPBOX_STYLE_DARK = 'mapbox://styles/mapbox/standard';
 
 export default function CollectionDetailScreen() {
   const router = useRouter();
@@ -293,8 +293,10 @@ export default function CollectionDetailScreen() {
               active={followUser}
               activeTint="#0a7ea4"
               activeTextColor="#fff"
-              textColor={theme.text}
-              backgroundColor={theme.background}
+              textColor="#fff"
+              backgroundColor="#3a3b3d"
+              borderColor="#3a3b3d"
+              forceSolid
             />
           </View>
         )}

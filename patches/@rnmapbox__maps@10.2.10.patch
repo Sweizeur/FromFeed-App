@@ -1,0 +1,38 @@
+diff --git a/lib/module/components/MapView.js b/lib/module/components/MapView.js
+index 27b4289bab80bb85d2d4be51dc61dcf469c386ef..3ae99b1e8fce383c10ac65662796eea0a714044c 100644
+--- a/lib/module/components/MapView.js
++++ b/lib/module/components/MapView.js
+@@ -46,11 +46,11 @@ class MapView extends NativeBridgeComponent(React.PureComponent, NativeMapViewMo
+     scrollEnabled: true,
+     pitchEnabled: true,
+     rotateEnabled: true,
+-    attributionEnabled: true,
++    attributionEnabled: false,
+     compassEnabled: false,
+     compassFadeWhenNorth: false,
+-    logoEnabled: true,
+-    scaleBarEnabled: true,
++    logoEnabled: false,
++    scaleBarEnabled: false,
+     surfaceView: RNMBXModule.MapboxV10 ? true : false,
+     requestDisallowInterceptTouchEvent: false,
+     regionWillChangeDebounceTime: 10,
+diff --git a/src/components/MapView.tsx b/src/components/MapView.tsx
+index b458c8517688c925f2fe7c059c9395619ed5fd9b..bee17a74d903a0296a672ef0d643dddca8b23646 100644
+--- a/src/components/MapView.tsx
++++ b/src/components/MapView.tsx
+@@ -489,11 +489,11 @@ class MapView extends NativeBridgeComponent(
+     scrollEnabled: true,
+     pitchEnabled: true,
+     rotateEnabled: true,
+-    attributionEnabled: true,
++    attributionEnabled: false,
+     compassEnabled: false,
+     compassFadeWhenNorth: false,
+-    logoEnabled: true,
+-    scaleBarEnabled: true,
++    logoEnabled: false,
++    scaleBarEnabled: false,
+     surfaceView: RNMBXModule.MapboxV10 ? true : false,
+     requestDisallowInterceptTouchEvent: false,
+     regionWillChangeDebounceTime: 10,

@@ -31,6 +31,8 @@ export interface GlassButtonProps {
   borderColor?: string;
   /** Variante plus petite (sous-filtres, types) */
   compact?: boolean;
+  /** Force un fond plein (pas de glass), pour garder une couleur constante (ex. bouton localisation) */
+  forceSolid?: boolean;
 }
 
 export default function GlassButton({
@@ -46,9 +48,11 @@ export default function GlassButton({
   backgroundColor,
   borderColor,
   compact = false,
+  forceSolid = false,
   accessibilityLabel: a11yLabel,
 }: GlassButtonProps) {
   const iconOnly = !label && !!icon;
+  const useGlassEffect = useGlass && !forceSolid;
   const paddingH = iconOnly ? 12 : compact ? 12 : 18;
   const paddingV = iconOnly ? 12 : compact ? 6 : 8;
   const borderRadius = compact || iconOnly ? 12 : 20;
@@ -80,7 +84,7 @@ export default function GlassButton({
 
   const a11y = a11yLabel ?? (iconOnly ? undefined : label) ?? undefined;
 
-  if (useGlass) {
+  if (useGlassEffect) {
     return (
       <Pressable
         onPress={onPress}
@@ -109,6 +113,8 @@ export default function GlassButton({
 
   const fallbackBg = backgroundColor ?? (active ? activeTint : '#F3F3F3');
   const fallbackBorder = borderColor ?? (active ? activeTint : '#E0E0E0');
+  const effectiveBg = forceSolid && backgroundColor !== undefined ? backgroundColor : fallbackBg;
+  const effectiveBorder = forceSolid && borderColor !== undefined ? borderColor : fallbackBorder;
 
   return (
     <Pressable
@@ -119,9 +125,9 @@ export default function GlassButton({
           paddingHorizontal: paddingH,
           paddingVertical: paddingV,
           borderRadius,
-          backgroundColor: active ? activeTint : fallbackBg,
+          backgroundColor: active ? activeTint : effectiveBg,
           borderWidth: 1,
-          borderColor: active ? activeTint : fallbackBorder,
+          borderColor: active ? activeTint : effectiveBorder,
           opacity: pressed ? 0.85 : 1,
         },
         style,

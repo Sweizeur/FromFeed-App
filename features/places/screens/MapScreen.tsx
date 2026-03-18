@@ -36,7 +36,7 @@ import { placesToGeoJSON } from '@/features/places/utils/placesToGeoJSON';
 
 const CLUSTER_RED = '#E53935';
 const MAPBOX_STYLE_LIGHT = 'mapbox://styles/mapbox/standard';
-const MAPBOX_STYLE_DARK = 'mapbox://styles/sweizeur/cmmv93e5o002501qs3cl3ap4u';
+const MAPBOX_STYLE_DARK = 'mapbox://styles/mapbox/standard';
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
@@ -307,8 +307,10 @@ export default function MapScreen() {
                     ? 'Ne plus suivre ma position'
                     : 'Centrer et suivre ma position'
                 }
-                textColor={theme.text}
-                backgroundColor={theme.background}
+                textColor="#fff"
+                backgroundColor="#3a3b3d"
+                borderColor="#3a3b3d"
+                forceSolid
               />
             </View>
           )}
