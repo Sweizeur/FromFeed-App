@@ -259,7 +259,7 @@ export default function PlacesList({ onPlacePress, placesSummary, onRefresh, ref
       {stickyHeader}
       <FlatList
         data={dataWithSkeleton}
-        keyExtractor={(item) => item.__isSkeleton ? '__skeleton__' : keyExtractor(item)}
+        keyExtractor={(item) => ('__isSkeleton' in item && item.__isSkeleton) ? '__skeleton__' : keyExtractor(item)}
         renderItem={renderItemWithSkeleton}
         removeClippedSubviews={true}
         maxToRenderPerBatch={10}

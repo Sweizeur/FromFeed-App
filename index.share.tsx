@@ -16,7 +16,7 @@ const BACKEND_URL =
   'https://fromfeed-backend-production.up.railway.app';
 const TOKEN_KEY = 'fromfeed_auth_token';
 const PENDING_TASK_KEY = 'fromfeed_pending_task';
-const KEYCHAIN_GROUP = 'group.com.sweizeur.fromfeedapp';
+const KEYCHAIN_GROUP = 'group.fr.sweizeur.fromfeed';
 
 const SUPPORTED_HOSTS = [
   'tiktok.com',

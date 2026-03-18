@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sweizeur.fromfeedapp",
+      "bundleIdentifier": "fr.sweizeur.fromfeed",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSSupportsOpeningDocumentsInPlace": false,
@@ -34,13 +34,14 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.sweizeur.fromfeedapp"
+      "package": "fr.sweizeur.fromfeed"
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "@rnmapbox/maps",
       "expo-router",
       [
         "expo-splash-screen",

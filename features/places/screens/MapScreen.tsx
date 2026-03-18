@@ -1,19 +1,27 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   ActivityIndicator,
-  Text,
   Keyboard,
   TouchableWithoutFeedback,
+  Pressable,
   useColorScheme,
 } from 'react-native';
-import { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ClusteredMapView from 'react-native-map-clustering';
+import {
+  MapView,
+  Camera,
+  ShapeSource,
+  CircleLayer,
+  SymbolLayer,
+  MarkerView,
+  LocationPuck,
+} from '@rnmapbox/maps';
 import LinkBottomSheet from '@/features/places/components/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
-import { type Place, type PlaceSummary } from '@/lib/api';
+import type { Place, PlaceSummary } from '@/features/places/types';
 import { usePlaces } from '@/features/places/hooks/usePlaces';
 import { useMap } from '@/features/places/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
@@ -24,19 +32,18 @@ import GlassButton from '@/components/ui/GlassButton';
 import MapTabHeader from '@/features/places/components/MapTabHeader';
 import LinkLoadBanner from '@/features/places/components/LinkLoadBanner';
 import { router } from 'expo-router';
+import { placesToGeoJSON } from '@/features/places/utils/placesToGeoJSON';
 
 const CLUSTER_RED = '#E53935';
-const CLUSTER_SIZE = 32;
-const CLUSTER_FONT_SIZE = 12;
-const DEFAULT_MARKER_EMOJI = '📍';
-const MARKER_EMOJI_SIZE = 28;
-const MARKER_EMOJI_BOX = 40;
+const MAPBOX_STYLE_LIGHT = 'mapbox://styles/mapbox/standard';
+const MAPBOX_STYLE_DARK = 'mapbox://styles/sweizeur/cmmv93e5o002501qs3cl3ap4u';
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = Colors[isDark ? 'dark' : 'light'];
+  const mapStyle = isDark ? MAPBOX_STYLE_LIGHT : MAPBOX_STYLE_DARK;
 
   const {
     placesSummary,
@@ -48,16 +55,26 @@ export default function MapScreen() {
   const {
     region,
     loadingLocation,
-    mapViewRef,
+    cameraRef,
     animateToPlace,
     animateToUser,
     startWatchingUser,
     stopWatchingUser,
     isProgrammaticChange,
+    location,
   } = useMap();
 
   const { toast, showError, hideToast } = useToast();
-  const { isAddingPlace, setAddingPlace, linkLoadStatus, setLinkLoadStatus, successMessage, setSuccessMessage } = useAddingPlace();
+  const {
+    isAddingPlace,
+    setAddingPlace,
+    linkLoadStatus,
+    setLinkLoadStatus,
+    successMessage,
+    setSuccessMessage,
+  } = useAddingPlace();
+
+  const shapeSourceRef = useRef<ShapeSource>(null);
 
   const onPlaceSaved = useCallback(async () => {
     await refreshPlaces(true, true);
@@ -90,6 +107,48 @@ export default function MapScreen() {
   );
 
   const filteredPlaces = placesSummary;
+  const geoJson = useMemo(
+    () => placesToGeoJSON(filteredPlaces),
+    [filteredPlaces]
+  );
+  const placesById = useMemo(() => {
+    const m = new Map<string, PlaceSummary>();
+    filteredPlaces.forEach((p) => p?.id && m.set(p.id, p));
+    return m;
+  }, [filteredPlaces]);
+
+  const handleShapePress = useCallback(
+    async (
+      event: { features: Array<{ properties?: Record<string, unknown> | null; geometry?: { coordinates?: number[] } }> }
+    ) => {
+      const feature = event.features?.[0];
+      if (!feature?.properties) return;
+      const props = feature.properties;
+      const isCluster = 'point_count' in props && typeof props.point_count === 'number';
+      const coords = feature.geometry?.coordinates;
+      const coordPair = coords && coords.length >= 2 ? ([coords[0], coords[1]] as [number, number]) : undefined;
+      if (isCluster && shapeSourceRef.current && coordPair) {
+        try {
+          const zoom = await shapeSourceRef.current.getClusterExpansionZoom(feature as any);
+          cameraRef.current?.setCamera({
+            centerCoordinate: coordPair,
+            zoomLevel: zoom,
+            animationDuration: 400,
+            animationMode: 'flyTo',
+          });
+        } catch {
+          cameraRef.current?.flyTo(coordPair, 600);
+        }
+        return;
+      }
+      const id = props.id as string | undefined;
+      if (id) {
+        const place = placesById.get(id);
+        if (place) await handlePlacePress(place);
+      }
+    },
+    [placesById, handlePlacePress, cameraRef]
+  );
 
   const handleCenterUser = useCallback(async () => {
     if (followUser) {
@@ -102,13 +161,38 @@ export default function MapScreen() {
     }
   }, [followUser, startWatchingUser, stopWatchingUser, animateToUser]);
 
-  const handleRegionChangeComplete = useCallback(() => {
-    if (isProgrammaticChange()) return;
-    if (followUser) {
-      setFollowUser(false);
-      stopWatchingUser();
-    }
-  }, [followUser, isProgrammaticChange, stopWatchingUser]);
+  const handleRegionDidChange = useCallback(
+    (regionFeature: { properties?: { isUserInteraction?: boolean } }) => {
+      if (!regionFeature?.properties?.isUserInteraction) return;
+      if (isProgrammaticChange()) return;
+      if (followUser) {
+        setFollowUser(false);
+        stopWatchingUser();
+      }
+    },
+    [followUser, isProgrammaticChange, stopWatchingUser]
+  );
+
+  const clusterLayerStyle = useMemo(
+    () => ({
+      circleRadius: 18,
+      circleColor: CLUSTER_RED,
+      circleStrokeWidth: 2,
+      circleStrokeColor: '#fff',
+      circlePitchAlignment: 'viewport' as const,
+    }),
+    []
+  );
+  const clusterCountLayerStyle = useMemo(
+    () =>
+      ({
+        textField: ['get', 'point_count_abbreviated'],
+        textSize: 12,
+        textColor: '#fff',
+        textPitchAlignment: 'viewport',
+      }) as const,
+    []
+  );
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -133,57 +217,74 @@ export default function MapScreen() {
             </View>
           )}
           {!loadingLocation && region && (
-            <ClusteredMapView
-              ref={mapViewRef}
+            <MapView
               style={StyleSheet.absoluteFillObject}
-              initialRegion={region}
-              showsUserLocation
-              onRegionChangeComplete={handleRegionChangeComplete}
-              clusterColor={CLUSTER_RED}
-              clusterTextColor="#FFFFFF"
-              renderCluster={({ id, geometry, properties, onPress }) => (
-                <Marker
-                  key={`cluster-${id}-${properties.point_count}`}
-                  coordinate={{
-                    latitude: geometry.coordinates[1],
-                    longitude: geometry.coordinates[0],
-                  }}
-                  onPress={onPress}
-                >
-                  <View style={clusterStyles.bubble}>
-                    <Text style={clusterStyles.count} numberOfLines={1}>
-                      {properties.point_count}
-                    </Text>
-                  </View>
-                </Marker>
-              )}
+              styleURL={mapStyle}
+              projection="globe"
+              onRegionDidChange={handleRegionDidChange}
             >
+              <Camera
+                ref={cameraRef}
+                defaultSettings={{
+                  centerCoordinate: region.centerCoordinate,
+                  zoomLevel: region.zoomLevel,
+                }}
+                animationDuration={1000}
+                animationMode="flyTo"
+              />
+              {location && (
+                <LocationPuck
+                  visible
+                  puckBearing="heading"
+                  puckBearingEnabled
+                />
+              )}
+              <ShapeSource
+                ref={shapeSourceRef}
+                id="places"
+                shape={geoJson}
+                cluster
+                clusterRadius={15}
+                clusterMaxZoomLevel={14}
+                onPress={handleShapePress as (e: unknown) => void}
+              >
+                <CircleLayer
+                  id="places-clusters"
+                  filter={['has', 'point_count']}
+                  style={clusterLayerStyle}
+                />
+                <SymbolLayer
+                  id="places-cluster-count"
+                  filter={['has', 'point_count']}
+                  style={clusterCountLayerStyle as Record<string, unknown>}
+                />
+              </ShapeSource>
               {filteredPlaces
                 .filter((p) => p?.id && p.lat != null && p.lon != null)
                 .map((place) => (
-                  <Marker
+                  <MarkerView
                     key={place.id}
-                    coordinate={{ latitude: place.lat!, longitude: place.lon! }}
-                    title={place.placeName || place.rawTitle || 'Lieu'}
-                    description={place.googleFormattedAddress || place.address || undefined}
-                    onPress={() => handlePlacePress(place)}
-                    tracksViewChanges={false}
+                    coordinate={[place.lon!, place.lat!]}
+                    allowOverlap={false}
                   >
-                    <View
-                      style={[
-                        markerStyles.emojiBox,
-                        {
-                          backgroundColor: theme.surface,
-                          borderColor: theme.border,
-                          shadowColor: '#000',
-                        },
-                      ]}
-                    >
-                      <Text style={markerStyles.emoji}>{place.markerEmoji ?? DEFAULT_MARKER_EMOJI}</Text>
-                    </View>
-                  </Marker>
+                    <Pressable onPress={() => handlePlacePress(place)}>
+                      <View
+                        style={[
+                          markerStyles.emojiBox,
+                          {
+                            backgroundColor: theme.surface,
+                            borderColor: theme.border,
+                          },
+                        ]}
+                      >
+                        <Text style={markerStyles.emoji}>
+                          {place.markerEmoji ?? '📍'}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </MarkerView>
                 ))}
-            </ClusteredMapView>
+            </MapView>
           )}
           {!loadingLocation && !region && (
             <View style={styles.mapLoading}>
@@ -191,14 +292,21 @@ export default function MapScreen() {
             </View>
           )}
           {!loadingLocation && region && (
-            <View style={[styles.centerUserButton, { bottom: insets.bottom + 72 }]} pointerEvents="box-none">
+            <View
+              style={[styles.centerUserButton, { bottom: insets.bottom + 72 }]}
+              pointerEvents="box-none"
+            >
               <GlassButton
                 icon="locate"
                 onPress={handleCenterUser}
                 active={followUser}
                 activeTint="#0a7ea4"
                 activeTextColor="#fff"
-                accessibilityLabel={followUser ? 'Ne plus suivre ma position' : 'Centrer et suivre ma position'}
+                accessibilityLabel={
+                  followUser
+                    ? 'Ne plus suivre ma position'
+                    : 'Centrer et suivre ma position'
+                }
                 textColor={theme.text}
                 backgroundColor={theme.background}
               />
@@ -230,12 +338,20 @@ export default function MapScreen() {
               setAddingPlace(false);
               setLinkLoadStatus('idle');
               setProcessingUrl(null);
-              showError(error.message || "Une erreur est survenue lors de l'analyse du lien.");
+              showError(
+                error.message ||
+                  "Une erreur est survenue lors de l'analyse du lien."
+              );
             }
           }}
         />
 
-        <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
+        <Toast
+          visible={toast.visible}
+          message={toast.message}
+          type={toast.type}
+          onHide={hideToast}
+        />
       </View>
     </TouchableWithoutFeedback>
   );
@@ -248,30 +364,24 @@ const styles = StyleSheet.create({
   centerUserButton: { position: 'absolute', right: 16, zIndex: 10 },
 });
 
-const clusterStyles = StyleSheet.create({
-  bubble: {
-    width: CLUSTER_SIZE,
-    height: CLUSTER_SIZE,
-    borderRadius: CLUSTER_SIZE / 2,
-    backgroundColor: CLUSTER_RED,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  count: { color: '#FFFFFF', fontSize: CLUSTER_FONT_SIZE, fontWeight: '600' },
-});
+const MARKER_BOX = 40;
 
 const markerStyles = StyleSheet.create({
   emojiBox: {
-    width: MARKER_EMOJI_BOX,
-    height: MARKER_EMOJI_BOX,
+    width: MARKER_BOX,
+    height: MARKER_BOX,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: MARKER_EMOJI_BOX / 2,
+    borderRadius: MARKER_BOX / 2,
     borderWidth: 2,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 4,
   },
-  emoji: { fontSize: MARKER_EMOJI_SIZE, lineHeight: MARKER_EMOJI_BOX, textAlign: 'center' },
+  emoji: {
+    fontSize: 22,
+    textAlign: 'center',
+  },
 });

@@ -9,7 +9,7 @@ import { useShareHandler } from '@/hooks/useShareHandler';
 
 const PENDING_LINK_TASK_ID = '@fromfeed:pendingLinkTaskId';
 const SHARED_PENDING_TASK_KEY = 'fromfeed_pending_task';
-const KEYCHAIN_GROUP = 'group.com.sweizeur.fromfeedapp';
+const KEYCHAIN_GROUP = 'group.fr.sweizeur.fromfeed';
 const POLL_INTERVALS = [1000, 2000, 4000, 8000, 10000];
 const POLL_MAX_MS = 5 * 60 * 1000;
 

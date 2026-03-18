@@ -47,7 +47,7 @@ const USER_STORAGE_KEY = '@fromfeed:user'; // AsyncStorage accepte @ et :
 
 /** Sur iOS, partage du keychain avec la Share Extension (même App Group). */
 const SECURE_STORE_IOS_OPTIONS = Platform.OS === 'ios'
-  ? { accessGroup: 'group.com.sweizeur.fromfeedapp' as const }
+  ? { accessGroup: 'group.fr.sweizeur.fromfeed' as const }
   : {};
 
 export interface AuthUser {
