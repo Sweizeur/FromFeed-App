@@ -11,7 +11,7 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { getConversation } from '@/lib/api';
-import { exportPlanToCalendar } from '@/lib/services/calendar-export';
+import { openAddEventToCalendarAsync } from '@/lib/services/calendar-export';
 import ConversationsModal from '@/features/ai/components/ConversationsModal';
 import AIHeader from '@/features/ai/components/AIHeader';
 import AIMessage from '@/features/ai/components/AIMessage';
@@ -221,18 +221,13 @@ export default function AIScreen() {
                     message={message}
                     colorScheme={colorScheme ?? 'light'}
                     onAddToCalendar={async (dp: DraftPlan) => {
-                      const plan = draftPlanToPlan(dp);
-                      const planWithDetails = await enrichPlanWithPlaceDetails(plan);
-                      const result = await exportPlanToCalendar(planWithDetails);
-                      if (result.success) {
-                        const msg =
-                          result.added === 0 && result.skipped > 0
-                            ? `${result.skipped} événement(s) déjà présent(s) dans le calendrier.`
-                            : `${result.added} événement(s) ajouté(s) au calendrier.` +
-                              (result.skipped > 0 ? ` ${result.skipped} déjà présent(s).` : '');
+                      try {
+                        const plan = draftPlanToPlan(dp);
+                        const planWithDetails = await enrichPlanWithPlaceDetails(plan);
+                        await openAddEventToCalendarAsync(planWithDetails);
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : 'Impossible d\'ouvrir le calendrier.';
                         Alert.alert('Calendrier', msg);
-                      } else {
-                        Alert.alert('Erreur', result.error);
                       }
                     }}
                   />

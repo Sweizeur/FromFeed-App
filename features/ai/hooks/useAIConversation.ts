@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSharedValue, useAnimatedStyle, withTiming, withSequence, Easing } from 'react-native-reanimated';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getConversation } from '@/lib/api';
 import type { Plan, PlanActivity } from '@/features/ai/types';
 import { getPlaceDetails } from '@/lib/api';
@@ -156,6 +157,8 @@ export function useAIConversation() {
     [titleOpacity, titleScale]
   );
 
+  const queryClient = useQueryClient();
+
   // Load persisted conversation on mount
   useEffect(() => {
     (async () => {
@@ -181,50 +184,47 @@ export function useAIConversation() {
     })();
   }, []);
 
-  // Fetch fresh messages from API after cache is displayed
-  useEffect(() => {
-    const loadFromApi = async () => {
-      if (conversationId) {
-        try {
-          const result = await getConversation(conversationId);
-          if (result?.success && result.conversation) {
-            if (result.conversation.messages) {
-              const formatted: Message[] = result.conversation.messages.map((msg) => {
-                const { cleanContent, draftPlan } = extractDraftPlan(msg.content);
-                return {
-                  id: msg.id || Date.now().toString() + Math.random(),
-                  role: msg.role,
-                  content: cleanContent,
-                  timestamp: new Date(msg.createdAt || Date.now()),
-                  draftPlan,
-                };
-              });
-              setMessages(formatted);
-              try {
-                await AsyncStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(formatted));
-              } catch {}
-            }
-            if (result.conversation.title !== conversationTitle) {
-              animateTitleChange(result.conversation.title);
-              if (result.conversation.title) {
-                try {
-                  await AsyncStorage.setItem(getConversationTitleKey(conversationId), result.conversation.title);
-                } catch {}
-              }
-            }
-          }
-        } catch (e) {
-          __DEV__ && console.error('[AIConversation] API load error:', e);
-        }
-      } else {
-        setMessages([]);
-        animateTitleChange(null);
-      }
-    };
+  // Fetch fresh messages via TanStack Query
+  const { data: conversationData } = useQuery({
+    queryKey: ['conversation', conversationId],
+    queryFn: async () => {
+      if (!conversationId) return null;
+      const result = await getConversation(conversationId);
+      if (result?.success && result.conversation) return result.conversation;
+      return null;
+    },
+    enabled: !!conversationId,
+    staleTime: 10_000,
+  });
 
-    const timeoutId = setTimeout(loadFromApi, 100);
-    return () => clearTimeout(timeoutId);
-  }, [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Sync query data to local state
+  useEffect(() => {
+    if (!conversationId) {
+      setMessages([]);
+      animateTitleChange(null);
+      return;
+    }
+    if (conversationData?.messages) {
+      const formatted: Message[] = conversationData.messages.map((msg) => {
+        const { cleanContent, draftPlan } = extractDraftPlan(msg.content);
+        return {
+          id: msg.id || Date.now().toString() + Math.random(),
+          role: msg.role,
+          content: cleanContent,
+          timestamp: new Date(msg.createdAt || Date.now()),
+          draftPlan,
+        };
+      });
+      setMessages(formatted);
+      AsyncStorage.setItem(getConversationMessagesKey(conversationId), JSON.stringify(formatted)).catch(() => {});
+    }
+    if (conversationData?.title !== undefined && conversationData.title !== conversationTitle) {
+      animateTitleChange(conversationData.title);
+      if (conversationData.title) {
+        AsyncStorage.setItem(getConversationTitleKey(conversationId), conversationData.title).catch(() => {});
+      }
+    }
+  }, [conversationData, conversationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectConversation = useCallback(
     async (selectedId: string) => {

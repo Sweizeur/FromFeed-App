@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -15,13 +15,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
 import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 import { getAllPlacesSummary } from '@/lib/api';
 import { useCollectionsStore } from '@/features/collections/store/useCollectionsStore';
 import { MOCK_COLLECTION_FRIENDS } from '@/features/social/mocks/friends';
 import EmojiPicker from 'rn-emoji-keyboard';
 import type { EmojiType } from 'rn-emoji-keyboard';
-import type { PlaceSummary } from '@/features/places/types';
 
 type Step = 'info' | 'places';
 
@@ -48,26 +48,16 @@ export default function CreateCollectionScreen() {
     );
   }, []);
 
-  const [places, setPlaces] = useState<PlaceSummary[]>([]);
-  const [loadingPlaces, setLoadingPlaces] = useState(false);
+  const { data: placesData = [], isLoading: loadingPlaces } = useQuery({
+    queryKey: ['places', 'summary'],
+    queryFn: async () => {
+      const res = await getAllPlacesSummary();
+      return res?.places ?? [];
+    },
+    enabled: step === 'places',
+    staleTime: 30_000,
+  });
   const [selectedPlaceIds, setSelectedPlaceIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (step === 'places' && places.length === 0) {
-      const load = async () => {
-        setLoadingPlaces(true);
-        try {
-          const res = await getAllPlacesSummary();
-          setPlaces(res?.places ?? []);
-        } catch {
-          // silent
-        } finally {
-          setLoadingPlaces(false);
-        }
-      };
-      load();
-    }
-  }, [step, places.length]);
 
   const handleNext = () => setStep('places');
 
@@ -241,7 +231,7 @@ export default function CreateCollectionScreen() {
                   <ActivityIndicator size="large" color={theme.text} />
                   <Text style={[styles.loadingText, { color: subtextColor }]}>Chargement des lieux...</Text>
                 </View>
-              ) : places.length === 0 ? (
+              ) : placesData.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Ionicons name="location-outline" size={48} color={isDark ? '#555' : '#CCC'} />
                   <Text style={[styles.emptyTitle, { color: theme.text }]}>Aucun lieu sauvegardé</Text>
@@ -256,7 +246,7 @@ export default function CreateCollectionScreen() {
                       {selectedPlaceIds.length} lieu{selectedPlaceIds.length > 1 ? 'x' : ''} sélectionné{selectedPlaceIds.length > 1 ? 's' : ''}
                     </Text>
                   )}
-                  {places.map((place) => {
+                  {placesData.map((place) => {
                     const selected = selectedPlaceIds.includes(place.id);
                     return (
                       <TouchableOpacity

@@ -7,13 +7,21 @@
 import * as Calendar from 'expo-calendar';
 import type { Plan, PlanActivity } from '@/features/ai/types';
 
+export function getLocalTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'Europe/Paris';
+  }
+}
+
 /** Normalise la date du plan en YYYY-MM-DD (l'API peut renvoyer une ISO complète). */
-function toDateOnly(dateStr: string): string {
+export function toDateOnly(dateStr: string): string {
   const part = dateStr.split('T')[0];
   return part && /^\d{4}-\d{2}-\d{2}$/.test(part) ? part : dateStr;
 }
 
-function parseTimeToDate(dateOnly: string, timeStr: string | null | undefined): Date {
+export function parseTimeToDate(dateOnly: string, timeStr: string | null | undefined): Date {
   const d = new Date(dateOnly + 'T12:00:00');
   if (isNaN(d.getTime())) {
     return new Date(dateOnly + 'T09:00:00');
@@ -27,7 +35,7 @@ function parseTimeToDate(dateOnly: string, timeStr: string | null | undefined): 
 }
 
 /** Localisation / adresse pour le champ "location" de l'événement (→ preview plan dans le calendrier). */
-function getActivityLocation(activity: PlanActivity): string | undefined {
+export function getActivityLocation(activity: PlanActivity): string | undefined {
   const addr = activity.place?.googleFormattedAddress || activity.place?.address;
   if (addr) return addr;
   const name = activity.place?.placeName || activity.place?.rawTitle;
@@ -50,7 +58,7 @@ function getActivityUrl(activity: PlanActivity): string | undefined {
 }
 
 /** Vérifie que lat/lon sont des coordonnées valides (pas 0,0 ni hors plage). */
-function areValidCoords(lat: unknown, lon: unknown): lat is number {
+export function areValidCoords(lat: unknown, lon: unknown): lat is number {
   if (typeof lat !== 'number' || typeof lon !== 'number') return false;
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   if (lat === 0 && lon === 0) return false;
@@ -69,7 +77,7 @@ function getMapsLink(activity: PlanActivity): string | undefined {
 }
 
 /** Notes de l’événement : adresse, tél, URL, notes perso (pour tout avoir sous la main). */
-function buildActivityNotes(activity: PlanActivity): string {
+export function buildActivityNotes(activity: PlanActivity): string {
   const addr = activity.place?.googleFormattedAddress || activity.place?.address;
   const phone = getActivityPhone(activity);
   const url = getActivityUrl(activity);
@@ -79,6 +87,17 @@ function buildActivityNotes(activity: PlanActivity): string {
   if (phone) lines.push(`Tél: ${phone}`);
   if (url) lines.push(url);
   if (mapsLink) lines.push(`Carte: ${mapsLink}`);
+  if (activity.notes) lines.push(activity.notes);
+  return lines.join('\n');
+}
+
+/** Notes pour le formulaire natif : adresse, tél, notes perso uniquement (URL dans le champ dédié). */
+function buildActivityNotesWithoutUrl(activity: PlanActivity): string {
+  const addr = activity.place?.googleFormattedAddress || activity.place?.address;
+  const phone = getActivityPhone(activity);
+  const lines: string[] = [];
+  if (addr) lines.push(addr);
+  if (phone) lines.push(`Tél: ${phone}`);
   if (activity.notes) lines.push(activity.notes);
   return lines.join('\n');
 }
@@ -103,6 +122,46 @@ function findMatchingEvent(
     const evStart = ev.startDate instanceof Date ? ev.startDate.getTime() : new Date(ev.startDate).getTime();
     return Math.abs(evStart - startMs) <= tolMs;
   });
+}
+
+/**
+ * Ouvre l'UI native d'ajout d'événement (EKEventEditViewController sur iOS).
+ * L'utilisateur peut modifier titre, date, calendrier, etc. avant d'enregistrer.
+ * Utilise le premier lieu du plan pour pré-remplir le formulaire.
+ * Aucune permission requise sur iOS pour cette méthode.
+ */
+export async function openAddEventToCalendarAsync(plan: Plan): Promise<{ action: string; id: string | null }> {
+  const activities = plan.activities || [];
+  const first = activities[0];
+  if (!first) {
+    throw new Error('Aucune activité dans ce plan.');
+  }
+
+  const dateOnly = toDateOnly(plan.date);
+  const title = first.place?.placeName || first.place?.rawTitle || plan.title || 'Sortie';
+  let startDate = parseTimeToDate(dateOnly, first.startTime);
+  if (isNaN(startDate.getTime())) startDate = new Date(dateOnly + 'T12:00:00');
+  let endDate = parseTimeToDate(dateOnly, first.endTime || first.startTime);
+  if (isNaN(endDate.getTime()) || endDate.getTime() <= startDate.getTime()) {
+    endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+  }
+
+  const location = getActivityLocation(first);
+  const notes = buildActivityNotesWithoutUrl(first);
+  const url = getActivityUrl(first) || getMapsLink(first);
+  const timeZone = getLocalTimezone();
+
+  const eventData = {
+    title,
+    startDate,
+    endDate,
+    location: location ?? undefined,
+    notes: notes.trim() || undefined,
+    url: url || undefined,
+    timeZone,
+  };
+
+  return Calendar.createEventInCalendarAsync(eventData);
 }
 
 export async function exportPlanToCalendar(plan: Plan): Promise<ExportToCalendarResult> {
@@ -157,10 +216,7 @@ export async function exportPlanToCalendar(plan: Plan): Promise<ExportToCalendar
       const notes = buildActivityNotes(activity);
       const location = getActivityLocation(activity);
       const url = getActivityUrl(activity) || getMapsLink(activity);
-      const timeZone =
-        typeof Intl !== 'undefined' && Intl.DateTimeFormat?.().resolvedOptions?.().timeZone
-          ? Intl.DateTimeFormat().resolvedOptions().timeZone
-          : 'Europe/Paris';
+      const timeZone = getLocalTimezone();
 
       const lat = activity.place?.lat;
       const lon = activity.place?.lon;

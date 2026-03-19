@@ -1,150 +1,134 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
-import { getCollections, deleteCollection, duplicateCollection, createCollection, updateCollection, type CollectionSummary } from '@/lib/api';
+import { useEffect, useRef, useCallback } from 'react';
+import { create } from 'zustand';
+import {
+  getCollections,
+  deleteCollection,
+  duplicateCollection,
+  createCollection,
+  updateCollection,
+  type CollectionSummary,
+} from '@/lib/api';
 
 export type CollectionItem = CollectionSummary;
 
-interface StoreState {
+interface CollectionsState {
   collections: CollectionItem[];
   loaded: boolean;
   loading: boolean;
+
+  fetch: () => Promise<void>;
+  addOptimistic: (item: CollectionItem) => void;
+  removeById: (id: string) => void;
+  replaceById: (id: string, item: CollectionItem) => void;
+  updateById: (id: string, partial: Partial<CollectionItem>) => void;
 }
 
-type Listener = () => void;
+const useStore = create<CollectionsState>((set, get) => ({
+  collections: [],
+  loaded: false,
+  loading: false,
 
-let state: StoreState = { collections: [], loaded: false, loading: false };
-const listeners = new Set<Listener>();
+  fetch: async () => {
+    set({ loading: true });
+    try {
+      const res = await getCollections();
+      set({
+        collections: (res?.collections ?? []) as CollectionItem[],
+        loaded: true,
+        loading: false,
+      });
+    } catch {
+      set({ loading: false });
+    }
+  },
 
-function emit() {
-  listeners.forEach((listener) => listener());
-}
+  addOptimistic: (item) =>
+    set((s) => ({ collections: [item, ...s.collections] })),
 
-function setState(partial: Partial<StoreState>) {
-  state = { ...state, ...partial };
-  emit();
-}
+  removeById: (id) =>
+    set((s) => ({ collections: s.collections.filter((c) => c.id !== id) })),
 
-function getSnapshot(): StoreState {
-  return state;
-}
+  replaceById: (id, item) =>
+    set((s) => ({ collections: s.collections.map((c) => (c.id === id ? item : c)) })),
 
-function subscribe(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-async function fetchCollections() {
-  setState({ loading: true });
-  try {
-    const res = await getCollections();
-    setState({
-      collections: (res?.collections ?? []) as CollectionItem[],
-      loaded: true,
-      loading: false,
-    });
-  } catch {
-    setState({ loading: false });
-  }
-}
-
-function addOptimistic(item: CollectionItem) {
-  setState({ collections: [item, ...state.collections] });
-}
-
-function removeById(id: string) {
-  setState({ collections: state.collections.filter((collection) => collection.id !== id) });
-}
-
-function replaceById(id: string, item: CollectionItem) {
-  setState({
-    collections: state.collections.map((collection) => (collection.id === id ? item : collection)),
-  });
-}
-
-function updateById(id: string, partial: Partial<CollectionItem>) {
-  setState({
-    collections: state.collections.map((collection) =>
-      collection.id === id ? { ...collection, ...partial } : collection
-    ),
-  });
-}
+  updateById: (id, partial) =>
+    set((s) => ({
+      collections: s.collections.map((c) => (c.id === id ? { ...c, ...partial } : c)),
+    })),
+}));
 
 export function useCollectionsStore() {
-  const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const { collections, loaded, loading, fetch, addOptimistic, removeById, replaceById, updateById } = useStore();
   const initialFetchDone = useRef(false);
 
   useEffect(() => {
-    if (!snap.loaded && !snap.loading && !initialFetchDone.current) {
+    if (!loaded && !loading && !initialFetchDone.current) {
       initialFetchDone.current = true;
-      fetchCollections();
+      fetch();
     }
-  }, [snap.loaded, snap.loading]);
+  }, [loaded, loading, fetch]);
 
   const refresh = useCallback(async () => {
-    await fetchCollections();
-  }, []);
+    await fetch();
+  }, [fetch]);
 
-  const optimisticDelete = useCallback((collection: CollectionItem) => {
-    removeById(collection.id);
-    deleteCollection(collection.id).catch(() => {
-      setState({
-        collections: [...state.collections, collection].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        ),
+  const optimisticDelete = useCallback(
+    (collection: CollectionItem) => {
+      const prev = useStore.getState().collections;
+      removeById(collection.id);
+      deleteCollection(collection.id).catch(() => {
+        useStore.setState({
+          collections: [...prev].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          ),
+        });
       });
-    });
-  }, []);
+    },
+    [removeById]
+  );
 
-  const optimisticDuplicate = useCallback((collection: CollectionItem) => {
-    const tempId = `temp-${Date.now()}`;
-    const optimistic: CollectionItem = {
-      ...collection,
-      id: tempId,
-      name: `${collection.name} (copie)`,
-      createdAt: new Date().toISOString(),
-      sharedWithGroups: [],
-    };
-    addOptimistic(optimistic);
+  const optimisticDuplicate = useCallback(
+    (collection: CollectionItem) => {
+      const tempId = `temp-${Date.now()}`;
+      const optimistic: CollectionItem = {
+        ...collection,
+        id: tempId,
+        name: `${collection.name} (copie)`,
+        createdAt: new Date().toISOString(),
+        sharedWithGroups: [],
+      };
+      addOptimistic(optimistic);
 
-    duplicateCollection(collection.id)
-      .then((res) => {
-        if (res?.collection) {
-          replaceById(tempId, res.collection as CollectionItem);
-        }
-      })
-      .catch(() => {
-        removeById(tempId);
-      });
-  }, []);
+      duplicateCollection(collection.id)
+        .then((res) => {
+          if (res?.collection) replaceById(tempId, res.collection as CollectionItem);
+        })
+        .catch(() => removeById(tempId));
+    },
+    [addOptimistic, replaceById, removeById]
+  );
 
   const optimisticCreate = useCallback(
     async (data: { name: string; description?: string; isPrivate?: boolean; placeIds?: string[] }) => {
       const res = await createCollection(data);
-      if (res?.collection) {
-        addOptimistic(res.collection as CollectionItem);
-      }
+      if (res?.collection) addOptimistic(res.collection as CollectionItem);
       return res;
     },
-    []
+    [addOptimistic]
   );
 
   const optimisticUpdate = useCallback(
     (id: string, data: { name?: string; description?: string; isPrivate?: boolean }) => {
-      updateById(id, {
-        name: data.name,
-        description: data.description,
-        isPrivate: data.isPrivate,
-      });
-      updateCollection(id, data).catch(() => {
-        fetchCollections();
-      });
+      updateById(id, { name: data.name, description: data.description, isPrivate: data.isPrivate });
+      updateCollection(id, data).catch(() => fetch());
     },
-    []
+    [updateById, fetch]
   );
 
   return {
-    collections: snap.collections,
-    loading: !snap.loaded && snap.loading,
-    refreshing: snap.loaded && snap.loading,
+    collections,
+    loading: !loaded && loading,
+    refreshing: loaded && loading,
     refresh,
     optimisticDelete,
     optimisticDuplicate,

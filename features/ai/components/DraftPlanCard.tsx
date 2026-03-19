@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, darkColor } from '@/constants/theme';
 
@@ -36,14 +36,7 @@ export default function DraftPlanCard({ draftPlan, onAddToCalendar, colorScheme 
   const text = theme.text;
 
   const handleCalendarPress = () => {
-    Alert.alert(
-      'Ajouter au calendrier',
-      'Voulez-vous ajouter ce plan à votre calendrier ?',
-      [
-        { text: 'Non', style: 'cancel' },
-        { text: 'Oui', onPress: () => onAddToCalendar(draftPlan) },
-      ]
-    );
+    onAddToCalendar(draftPlan);
   };
 
   return (

@@ -2,6 +2,7 @@ import { apiRequest } from './client';
 import type {
   PlacesResponse,
   PlacesSummaryResponse,
+  PlacesListResponse,
   PlaceDetailsResponse,
   PlaceVideoFeedItem,
   Place,
@@ -46,20 +47,32 @@ export async function getPlaceVideosFeed(params?: {
   return apiRequest<{ videos: PlaceVideoFeedItem[] }>(url);
 }
 
+export async function getPlacesList(params?: {
+  cursor?: string;
+  limit?: number;
+}): Promise<PlacesListResponse | null> {
+  const searchParams = new URLSearchParams();
+  if (params?.cursor) searchParams.set('cursor', params.cursor);
+  if (params?.limit != null) searchParams.set('limit', String(params.limit));
+  const qs = searchParams.toString();
+  const url = qs ? `/api/places/list?${qs}` : '/api/places/list';
+  return apiRequest<PlacesListResponse>(url);
+}
+
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetailsResponse | null> {
-  return apiRequest<PlaceDetailsResponse>(`/api/places/${placeId}`);
+  return apiRequest<PlaceDetailsResponse>(`/api/places/${encodeURIComponent(placeId)}`);
 }
 
 export async function updatePlaceRating(
   placeId: string,
   rating: number | null
 ): Promise<{ success: boolean; rating: number | null } | null> {
-  return apiRequest(`/api/places/${placeId}/rating`, {
+  return apiRequest(`/api/places/${encodeURIComponent(placeId)}/rating`, {
     method: 'PATCH',
     body: JSON.stringify({ rating }),
   });
 }
 
 export async function deletePlace(placeId: string): Promise<{ message: string } | null> {
-  return apiRequest(`/api/places/${placeId}`, { method: 'DELETE' });
+  return apiRequest(`/api/places/${encodeURIComponent(placeId)}`, { method: 'DELETE' });
 }

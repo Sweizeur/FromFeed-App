@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
-import { getCollection } from '@/lib/api';
+import { useCollection } from '@/features/collections/hooks/useCollection';
 import { useCollectionsStore } from '@/features/collections/store/useCollectionsStore';
 import { MOCK_COLLECTION_FRIENDS } from '@/features/social/mocks/friends';
 import EmojiPicker from 'rn-emoji-keyboard';
@@ -34,7 +34,7 @@ export default function EditCollectionScreen() {
   const [selectedEmoji, setSelectedEmoji] = useState('📁');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const { optimisticUpdate } = useCollectionsStore();
-  const [loading, setLoading] = useState(true);
+  const { data: collectionData, isLoading: loading } = useCollection(id);
   const [saving, setSaving] = useState(false);
   const [sharedFriendIds, setSharedFriendIds] = useState<string[]>([]);
 
@@ -49,24 +49,12 @@ export default function EditCollectionScreen() {
   const subtextColor = isDark ? theme.icon : '#666';
 
   useEffect(() => {
-    if (!id) return;
-    const load = async () => {
-      try {
-        const res = await getCollection(id);
-        if (!res) return;
-        const collection = res.collection;
-        const match = collection.name.match(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F?)\s*(.*)$/u);
-        setSelectedEmoji(match ? match[1] : '📁');
-        setName(match ? match[2] : collection.name);
-        setDescription(collection.description ?? '');
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [id]);
+    if (!collectionData) return;
+    const match = collectionData.name.match(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F?)\s*(.*)$/u);
+    setSelectedEmoji(match ? match[1] : '📁');
+    setName(match ? match[2] : collectionData.name);
+    setDescription(collectionData.description ?? '');
+  }, [collectionData]);
 
   const handleSave = useCallback(() => {
     if (!id || !name.trim()) return;

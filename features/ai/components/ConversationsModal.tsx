@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -14,17 +14,8 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getConversations, deleteConversation } from '@/lib/api';
+import { useConversationsList, useDeleteConversation } from '@/features/ai/hooks/useConversations';
 import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
-
-interface Conversation {
-  id: string;
-  title: string | null;
-  createdAt: string;
-  updatedAt: string;
-  _count: { messages: number };
-}
 
 interface ConversationsModalProps {
   visible: boolean;
@@ -35,8 +26,6 @@ interface ConversationsModalProps {
   onRefresh?: () => void;
   colorScheme?: 'light' | 'dark';
 }
-
-const CONVERSATIONS_CACHE_KEY = '@fromfeed:conversations_cache';
 
 const modalBg = (scheme: 'light' | 'dark') => (scheme === 'dark' ? Colors.dark.background : '#fff');
 const surfaceColor = (scheme: 'light' | 'dark') => (scheme === 'dark' ? '#2C2E30' : '#FAFAFA');
@@ -60,109 +49,34 @@ export default function ConversationsModal({
   const muted = mutedColor(colorScheme);
   const textColor = colorScheme === 'dark' ? Colors.dark.text : darkColor;
   const emptyIcon = emptyIconColor(colorScheme);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+
+  const { data: conversations = [], refetch } = useConversationsList();
+  const deleteMutation = useDeleteConversation();
+
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(300);
 
-  // Charger le cache au montage (immédiatement, sans attendre)
-  useEffect(() => {
-    loadCachedConversations();
-  }, []);
-
-  // Charger les conversations quand le modal s'ouvre
   useEffect(() => {
     if (visible) {
       opacity.value = withTiming(1, { duration: 300 });
       translateY.value = withTiming(0, { duration: 300 });
-      
-      // 1. Charger le cache immédiatement (affichage instantané, pas de loader)
-      loadCachedConversations();
-      
-      // 2. Rafraîchir en arrière-plan sans loader visible
-      // La mise à jour se fera silencieusement quand la réponse arrive
-      loadConversationsInBackground();
+      refetch();
     } else {
       opacity.value = withTiming(0, { duration: 300 });
       translateY.value = withTiming(300, { duration: 300 });
     }
   }, [visible]);
 
-  // Charger les conversations depuis le cache (affichage immédiat, pas de loader)
-  const loadCachedConversations = async () => {
-    try {
-      const cachedData = await AsyncStorage.getItem(CONVERSATIONS_CACHE_KEY);
-      if (cachedData) {
-        const cachedConversations = JSON.parse(cachedData);
-        // Mettre à jour immédiatement avec le cache (affichage instantané)
-        setConversations(cachedConversations);
-      }
-      // Si pas de cache, conversations reste vide (affichage "Aucune conversation")
-      // La requête en arrière-plan va mettre à jour quand elle arrive
-    } catch (error) {
-      __DEV__ && console.error('[ConversationsModal] Erreur lors du chargement du cache:', error);
-    }
-  };
-
-  // Charger les conversations depuis l'API en arrière-plan (sans loader visible)
-  // Cette fonction met à jour silencieusement les conversations quand la réponse arrive
-  const loadConversationsInBackground = async () => {
-    try {
-      const result = await getConversations();
-      if (result && result.success) {
-        setConversations(result.conversations);
-        await AsyncStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(result.conversations));
-      }
-    } catch (error) {
-      __DEV__ && console.error('[ConversationsModal] Erreur lors du chargement:', error);
-    }
-  };
-
-  const handleDelete = async (conversationId: string, event: { stopPropagation: () => void }) => {
+  const handleDelete = (conversationId: string, event: { stopPropagation: () => void }) => {
     event.stopPropagation();
-    
-    // Sauvegarder la conversation supprimée pour pouvoir la restaurer en cas d'erreur
-    const conversationToDelete = conversations.find((c) => c.id === conversationId);
-    if (!conversationToDelete) return;
 
-    // 1. Supprimer immédiatement de l'UI (optimistic update)
-    const updatedConversations = conversations.filter((c) => c.id !== conversationId);
-    setConversations(updatedConversations);
-    
-    // Mettre à jour le cache immédiatement
-    await AsyncStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(updatedConversations));
-    
-    // Si la conversation supprimée est la conversation actuelle, réinitialiser
     if (currentConversationId === conversationId && onCurrentConversationDeleted) {
       onCurrentConversationDeleted();
     }
 
-    // 2. Faire la requête API en arrière-plan
-    try {
-      await deleteConversation(conversationId);
-      
-      // Succès : la conversation est déjà supprimée de l'UI
-      // Notifier le parent pour rafraîchir si nécessaire
-      if (onRefresh) {
-        onRefresh();
-      }
-    } catch (error) {
-      __DEV__ && console.error('[ConversationsModal] Erreur lors de la suppression:', error);
-      
-      // 3. Si l'API échoue, restaurer la conversation dans l'UI
-      const restoredConversations = [...updatedConversations, conversationToDelete];
-      // Trier par updatedAt décroissant pour garder l'ordre (comme la DB)
-      restoredConversations.sort((a, b) => 
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      );
-      
-      setConversations(restoredConversations);
-      
-      // Restaurer le cache
-      await AsyncStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(restoredConversations));
-      
-      // Optionnel : Afficher un message d'erreur à l'utilisateur
-      // Vous pouvez ajouter un toast/alert ici si nécessaire
-    }
+    deleteMutation.mutate(conversationId, {
+      onSuccess: () => onRefresh?.(),
+    });
   };
 
   const handleSelect = (conversationId: string) => {

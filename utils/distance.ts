@@ -1,10 +1,20 @@
+const EARTH_RADIUS_KM = 6371;
+const DEG_TO_RAD = Math.PI / 180;
+
+function isValidCoord(lat: number, lon: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180
+  );
+}
+
 /**
- * Calcule la distance entre deux coordonnées géographiques (formule de Haversine)
- * @param lat1 Latitude du premier point
- * @param lon1 Longitude du premier point
- * @param lat2 Latitude du deuxième point
- * @param lon2 Longitude du deuxième point
- * @returns Distance en kilomètres
+ * Calcule la distance entre deux coordonnées géographiques (formule de Haversine).
+ * Retourne NaN si les coordonnées sont invalides.
  */
 export function calculateDistance(
   lat1: number,
@@ -12,14 +22,17 @@ export function calculateDistance(
   lat2: number,
   lon2: number
 ): number {
-  const R = 6371; // Rayon de la Terre en km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
+  if (!isValidCoord(lat1, lon1) || !isValidCoord(lat2, lon2)) return NaN;
+
+  const dLat = (lat2 - lat1) * DEG_TO_RAD;
+  const dLon = (lon2 - lon1) * DEG_TO_RAD;
+  const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos(lat1 * DEG_TO_RAD) *
+      Math.cos(lat2 * DEG_TO_RAD) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+  return EARTH_RADIUS_KM * c;
 }
 

@@ -24,17 +24,17 @@ export async function sendAIMessageStreaming(
 
   let wsUrl: string;
   if (BACKEND_URL.startsWith('https://')) {
-    wsUrl = BACKEND_URL.replace('https://', 'wss://') + '/api/ai/chat/ws?token=' + encodeURIComponent(token);
+    wsUrl = BACKEND_URL.replace('https://', 'wss://') + '/api/ai/chat/ws';
   } else if (BACKEND_URL.startsWith('http://')) {
-    wsUrl = BACKEND_URL.replace('http://', 'ws://') + '/api/ai/chat/ws?token=' + encodeURIComponent(token);
+    wsUrl = BACKEND_URL.replace('http://', 'ws://') + '/api/ai/chat/ws';
   } else {
-    wsUrl = `wss://${BACKEND_URL}/api/ai/chat/ws?token=${encodeURIComponent(token)}`;
+    wsUrl = `wss://${BACKEND_URL}/api/ai/chat/ws`;
   }
 
-  return new Promise((resolve) => {
+  return new Promise<void>((resolve, reject) => {
     try {
       isStreamingActive = true;
-      devLog('[API] Connexion WebSocket:', wsUrl.replace(token, 'TOKEN_HIDDEN'));
+      devLog('[API] Connexion WebSocket:', wsUrl);
 
       if (currentWebSocket) {
         currentWebSocket.close();
@@ -45,12 +45,19 @@ export async function sendAIMessageStreaming(
 
       let fullResponse = '';
       let isComplete = false;
-      let resolved = false;
+      let settled = false;
 
       const cleanup = () => {
         isStreamingActive = false;
         if (currentWebSocket === ws) currentWebSocket = null;
-        if (!resolved) resolved = true;
+      };
+
+      const settle = (outcome: 'resolve' | 'reject', error?: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (outcome === 'resolve') resolve();
+        else reject(error);
       };
 
       ws.onopen = () => {
@@ -65,8 +72,10 @@ export async function sendAIMessageStreaming(
           }
           if (event.data.length > 100000) {
             devError('[API] Message WebSocket trop volumineux:', event.data.length);
-            cleanup();
+            const err = new Error('Message WebSocket trop volumineux');
+            onError(err);
             ws.close();
+            settle('reject', err);
             return;
           }
 
@@ -75,7 +84,12 @@ export async function sendAIMessageStreaming(
             data = JSON.parse(event.data);
           } catch {
             devError('[API] Erreur de parsing JSON:', event.data.substring(0, 100));
-            if (!isComplete) { cleanup(); ws.close(); }
+            if (!isComplete) {
+              const err = new Error('Erreur de parsing JSON WebSocket');
+              onError(err);
+              ws.close();
+              settle('reject', err);
+            }
             return;
           }
 
@@ -86,7 +100,13 @@ export async function sendAIMessageStreaming(
 
           if (data.type === 'connected') {
             devLog('[API] WebSocket:', data.message);
-            devLog('[API] Envoi du message de chat au serveur...');
+            devLog('[API] Envoi du token d\'authentification...');
+            ws.send(JSON.stringify({ type: 'auth', token }));
+            return;
+          }
+
+          if (data.type === 'authenticated') {
+            devLog('[API] Authentifié, envoi du message de chat...');
             ws.send(JSON.stringify({ type: 'chat', prompt, conversationId }));
             return;
           }
@@ -100,41 +120,62 @@ export async function sendAIMessageStreaming(
             }
           } else if (data.type === 'complete') {
             isComplete = true;
-            cleanup();
             const finalResponse = typeof data.response === 'string' ? data.response : fullResponse;
             const finalConversationId = typeof data.conversationId === 'string' ? data.conversationId : conversationId || '';
             onComplete(finalResponse, finalConversationId);
             ws.close();
-            resolve();
+            settle('resolve');
           } else if (data.type === 'error') {
-            cleanup();
+            const err = new Error(data.message || 'Erreur serveur WebSocket');
+            devError('[API] Erreur serveur:', data.message);
+            onError(err);
             ws.close();
+            settle('reject', err);
           } else {
             devWarn('[API] Type de message WebSocket inconnu:', data.type);
           }
         } catch (e) {
           devError('[API] Erreur lors du traitement du message WebSocket:', e);
-          if (!isComplete) { cleanup(); ws.close(); }
+          if (!isComplete) {
+            const err = e instanceof Error ? e : new Error('Erreur interne WebSocket');
+            onError(err);
+            ws.close();
+            settle('reject', err);
+          }
         }
       };
 
-      ws.onerror = (error) => {
-        devError('[API] Erreur WebSocket:', error);
-        if (!isComplete && !resolved) cleanup();
+      ws.onerror = (event) => {
+        devError('[API] Erreur WebSocket:', event);
+        const err = new Error('Erreur de connexion WebSocket');
+        if (!isComplete) onError(err);
+        settle('reject', err);
       };
 
       ws.onclose = (event) => {
         devLog('[API] WebSocket fermé, code:', event.code, 'reason:', event.reason);
-        cleanup();
+        if (!settled && !isComplete) {
+          const err = new Error(`WebSocket fermé prématurément (code: ${event.code})`);
+          onError(err);
+          settle('reject', err);
+        }
       };
 
       setTimeout(() => {
-        if (!isComplete && !resolved) { cleanup(); ws.close(); }
+        if (!settled) {
+          const err = new Error('WebSocket timeout (5 min)');
+          onError(err);
+          ws.close();
+          settle('reject', err);
+        }
       }, 5 * 60 * 1000);
     } catch (error) {
       isStreamingActive = false;
       currentWebSocket = null;
+      const err = error instanceof Error ? error : new Error("Erreur d'initialisation WebSocket");
       devError("[API] Erreur lors de l'initialisation WebSocket:", error);
+      onError(err);
+      reject(err);
     }
   });
 }
@@ -174,7 +215,7 @@ export async function getConversation(conversationId: string): Promise<{
   success: boolean;
   conversation: ConversationDetail;
 } | null> {
-  return apiRequest(`/api/ai/conversations/${conversationId}`);
+  return apiRequest(`/api/ai/conversations/${encodeURIComponent(conversationId)}`);
 }
 
 
@@ -182,5 +223,5 @@ export async function deleteConversation(conversationId: string): Promise<{
   success: boolean;
   message: string;
 } | null> {
-  return apiRequest(`/api/ai/conversations/${conversationId}`, { method: 'DELETE' });
+  return apiRequest(`/api/ai/conversations/${encodeURIComponent(conversationId)}`, { method: 'DELETE' });
 }

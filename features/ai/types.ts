@@ -1,4 +1,4 @@
-import type { PlaceSummary } from '@/features/places/types';
+import type { PlaceSummary } from '@/lib/types';
 
 export interface PlanActivity {
   id: string;

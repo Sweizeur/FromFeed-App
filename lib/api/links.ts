@@ -13,5 +13,5 @@ export async function createLinkPreviewTask(url: string): Promise<CreateLinkPrev
 }
 
 export async function getTaskStatus(taskId: string): Promise<GetTaskStatusResponse | null> {
-  return apiRequest<GetTaskStatusResponse>(`/api/tasks/${taskId}`);
+  return apiRequest<GetTaskStatusResponse>(`/api/tasks/${encodeURIComponent(taskId)}`);
 }

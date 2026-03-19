@@ -12,8 +12,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
 
 const BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL ||
-  'https://fromfeed-backend-production.up.railway.app';
+  process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 const TOKEN_KEY = 'fromfeed_auth_token';
 const PENDING_TASK_KEY = 'fromfeed_pending_task';
 const KEYCHAIN_GROUP = 'group.fr.sweizeur.fromfeed';

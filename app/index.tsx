@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAuth } from '@/lib/auth/useAuthStore';
 import { Colors, darkColor } from '@/constants/theme';
 
 // Logo Google officiel (G multicolore)

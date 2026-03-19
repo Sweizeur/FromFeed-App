@@ -198,7 +198,7 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
           err.message?.includes('Aborted') ||
           err.name === 'AbortError';
         if (!isNetworkError) {
-          console.error('[LinkProcessing] Erreur:', error);
+          __DEV__ && console.error('[LinkProcessing] Erreur:', error);
           showError(err.message || "Une erreur est survenue lors de l'analyse du lien.");
         }
         processingUrlRef.current = null;
@@ -210,14 +210,21 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
 
   useShareHandler(handleSharedUrl);
 
-  // Handle deep links from share extension (openHostApp with ?shareUrl=...)
   useEffect(() => {
+    const DEEP_LINK_ALLOWED_HOSTS = ['fromfeed.fr', 'www.fromfeed.fr'];
+
     const handleUrl = (url: string | null) => {
       if (!url) return;
       try {
         const parsed = new URL(url);
         const shareUrl = parsed.searchParams.get('shareUrl');
-        if (shareUrl) handleSharedUrl(decodeURIComponent(shareUrl));
+        if (!shareUrl) return;
+        const decoded = decodeURIComponent(shareUrl);
+        const hostMatch = decoded.match(/^https?:\/\/([^/?#]+)/);
+        const host = hostMatch?.[1]?.toLowerCase();
+        if (host && DEEP_LINK_ALLOWED_HOSTS.some(h => host === h || host.endsWith('.' + h))) {
+          handleSharedUrl(decoded);
+        }
       } catch {}
     };
 

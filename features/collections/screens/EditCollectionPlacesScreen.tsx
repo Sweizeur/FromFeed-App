@@ -14,10 +14,11 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import {
-  getCollection,
   getAllPlacesSummary,
   batchUpdateCollectionPlaces,
 } from '@/lib/api';
+import { useCollection } from '@/features/collections/hooks/useCollection';
+import { useQuery } from '@tanstack/react-query';
 import type { PlaceSummary } from '@/features/places/types';
 
 export default function EditCollectionPlacesScreen() {
@@ -31,35 +32,31 @@ export default function EditCollectionPlacesScreen() {
   const [places, setPlaces] = useState<PlaceSummary[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [initialIds, setInitialIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const { data: collectionData, isLoading: loadingCollection } = useCollection(id);
+  const { data: placesData } = useQuery({
+    queryKey: ['places', 'summary'],
+    queryFn: async () => {
+      const res = await getAllPlacesSummary();
+      return res?.places ?? [];
+    },
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (collectionData?.places && placesData) {
+      const ids = new Set(collectionData.places.map((cp: { placeId: string }) => cp.placeId));
+      setInitialIds(ids);
+      setSelectedIds(new Set(ids));
+      setPlaces(placesData);
+    }
+  }, [collectionData, placesData]);
+  const loading = loadingCollection;
 
   const subtextColor = isDark ? theme.icon : '#888';
   const inputBg = isDark ? '#252628' : '#F5F5F5';
   const inputBorder = isDark ? '#3A3B3D' : '#E5E5E5';
-
-  useEffect(() => {
-    if (!id) return;
-    const load = async () => {
-      try {
-        setLoading(true);
-        const [collectionRes, placesRes] = await Promise.all([
-          getCollection(id),
-          getAllPlacesSummary(),
-        ]);
-        if (!collectionRes?.collection || !placesRes?.places) return;
-        const ids = new Set(collectionRes.collection.places.map((collectionPlace: { placeId: string }) => collectionPlace.placeId));
-        setInitialIds(ids);
-        setSelectedIds(new Set(ids));
-        setPlaces(placesRes.places);
-      } catch {
-        // silently fail
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [id]);
 
   const togglePlace = useCallback((placeId: string) => {
     setSelectedIds((prev) => {

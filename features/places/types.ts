@@ -149,6 +149,12 @@ export interface PlacesSummaryResponse {
   places: PlaceSummary[];
 }
 
+export interface PlacesListResponse {
+  places: PlaceSummary[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface PlaceDetailsResponse {
   place: Place;
 }

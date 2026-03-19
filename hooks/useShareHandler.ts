@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useShareIntent, ShareIntentModule } from 'expo-share-intent';
@@ -36,62 +36,41 @@ function usePollPendingShareOnActive(isReady: boolean) {
  */
 export function useShareHandler(onUrlReceived: (url: string) => void) {
   const hasHandledShare = useRef<string | null>(null);
+  const onUrlReceivedRef = useRef(onUrlReceived);
+  onUrlReceivedRef.current = onUrlReceived;
 
   const { isReady, hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
   usePollPendingShareOnActive(isReady);
 
-  useEffect(() => {
-    // Attendre que le module soit prêt
-    if (!isReady) {
+  const handleShareIntent = useCallback(() => {
+    if (!shareIntent) return;
+
+    const shareId = JSON.stringify(shareIntent);
+    if (hasHandledShare.current === shareId) return;
+    hasHandledShare.current = shareId;
+
+    let extractedUrl: string | null = null;
+
+    if ('url' in shareIntent && typeof shareIntent.url === 'string') {
+      extractedUrl = shareIntent.url;
+    } else if ('text' in shareIntent && typeof shareIntent.text === 'string') {
+      const text = shareIntent.text;
+      const urlMatch = text.match(/https?:\/\/[^\s]+/);
+      extractedUrl = urlMatch?.[0] ?? (text.startsWith('http://') || text.startsWith('https://') ? text : null);
+    }
+
+    if (!extractedUrl) {
+      __DEV__ && console.log('[ShareHandler] Aucune URL trouvée dans le contenu partagé:', shareIntent);
+      resetShareIntent(true);
       return;
     }
 
-    // Si on a un share intent et qu'on ne l'a pas encore traité
-    if (hasShareIntent && shareIntent) {
-      // Créer un identifiant unique pour ce share intent
-      const shareId = JSON.stringify(shareIntent);
-      
-      // Vérifier si on a déjà traité ce share intent
-      if (hasHandledShare.current === shareId) {
-        return;
-      }
-      
-      hasHandledShare.current = shareId;
+    onUrlReceivedRef.current(extractedUrl);
+    resetShareIntent(true);
+  }, [shareIntent, resetShareIntent]);
 
-      // Fonction pour traiter une URL partagée
-      let extractedUrl: string | null = null;
-
-      // expo-share-intent peut retourner différents types de contenu
-      // On cherche une URL dans le texte ou directement
-      
-      // Si c'est directement une URL
-      if ('url' in shareIntent && typeof shareIntent.url === 'string') {
-        extractedUrl = shareIntent.url;
-      }
-      // Si c'est du texte qui contient une URL
-      else if ('text' in shareIntent && typeof shareIntent.text === 'string') {
-        const text = shareIntent.text;
-        // Chercher une URL dans le texte (format http:// ou https://)
-        const urlMatch = text.match(/https?:\/\/[^\s]+/);
-        if (urlMatch) {
-          extractedUrl = urlMatch[0];
-        } else {
-          // Si le texte entier ressemble à une URL
-          if (text.startsWith('http://') || text.startsWith('https://')) {
-            extractedUrl = text;
-          }
-        }
-      }
-
-      if (!extractedUrl) {
-        console.log('[ShareHandler] Aucune URL trouvée dans le contenu partagé:', shareIntent);
-        resetShareIntent(true);
-        return;
-      }
-
-      // Traiter toute URL partagée (TikTok, Instagram, ou autre lien de lieu)
-      onUrlReceived(extractedUrl);
-      resetShareIntent(true);
-    }
-  }, [isReady, hasShareIntent, shareIntent, onUrlReceived, resetShareIntent]);
+  useEffect(() => {
+    if (!isReady || !hasShareIntent) return;
+    handleShareIntent();
+  }, [isReady, hasShareIntent, handleShareIntent]);
 }

@@ -1,12 +1,10 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ActivityIndicator,
   Keyboard,
   TouchableWithoutFeedback,
-  Pressable,
   useColorScheme,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,11 +14,11 @@ import {
   ShapeSource,
   CircleLayer,
   SymbolLayer,
-  MarkerView,
   LocationPuck,
 } from '@rnmapbox/maps';
 import LinkBottomSheet from '@/features/places/components/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
+import MapMarkers from '@/features/places/components/MapMarkers';
 import type { Place, PlaceSummary } from '@/features/places/types';
 import { usePlaces } from '@/features/places/hooks/usePlaces';
 import { useMap } from '@/features/places/hooks/useMap';
@@ -259,31 +257,11 @@ export default function MapScreen() {
                   style={clusterCountLayerStyle as Record<string, unknown>}
                 />
               </ShapeSource>
-              {filteredPlaces
-                .filter((p) => p?.id && p.lat != null && p.lon != null)
-                .map((place) => (
-                  <MarkerView
-                    key={place.id}
-                    coordinate={[place.lon!, place.lat!]}
-                    allowOverlap={false}
-                  >
-                    <Pressable onPress={() => handlePlacePress(place)}>
-                      <View
-                        style={[
-                          markerStyles.emojiBox,
-                          {
-                            backgroundColor: theme.surface,
-                            borderColor: theme.border,
-                          },
-                        ]}
-                      >
-                        <Text style={markerStyles.emoji}>
-                          {place.markerEmoji ?? '📍'}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  </MarkerView>
-                ))}
+              <MapMarkers
+                places={filteredPlaces}
+                theme={theme}
+                onPlacePress={handlePlacePress}
+              />
             </MapView>
           )}
           {!loadingLocation && !region && (
@@ -366,24 +344,3 @@ const styles = StyleSheet.create({
   centerUserButton: { position: 'absolute', right: 16, zIndex: 10 },
 });
 
-const MARKER_BOX = 40;
-
-const markerStyles = StyleSheet.create({
-  emojiBox: {
-    width: MARKER_BOX,
-    height: MARKER_BOX,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: MARKER_BOX / 2,
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 4,
-  },
-  emoji: {
-    fontSize: 22,
-    textAlign: 'center',
-  },
-});

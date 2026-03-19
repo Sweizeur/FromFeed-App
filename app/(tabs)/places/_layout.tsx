@@ -3,11 +3,11 @@ import { useColorScheme, TouchableOpacity, Platform, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
-import { SearchContextProvider, useSearchText } from '@/features/places/context/SearchContext';
+import { useFiltersStore } from '@/features/places/store/useFiltersStore';
 
-function PlacesLayoutInner() {
+export default function PlacesLayout() {
   const router = useRouter();
-  const { setSearchText } = useSearchText();
+  const setSearchText = useFiltersStore((s) => s.setSearchText);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = Colors[isDark ? 'dark' : 'light'];
@@ -69,13 +69,5 @@ function PlacesLayoutInner() {
     <Stack screenOptions={screenOptions}>
       <Stack.Screen name="index" />
     </Stack>
-  );
-}
-
-export default function PlacesLayout() {
-  return (
-    <SearchContextProvider>
-      <PlacesLayoutInner />
-    </SearchContextProvider>
   );
 }

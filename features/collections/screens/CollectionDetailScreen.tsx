@@ -7,7 +7,7 @@ import {
   Pressable,
   useColorScheme,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   MapView,
   Camera,
@@ -22,7 +22,9 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from '@/components/common/Toast';
 import GlassButton from '@/components/ui/GlassButton';
-import { getCollection, getAllPlacesSummary, type PlaceSummary } from '@/lib/api';
+import { getAllPlacesSummary, type PlaceSummary } from '@/lib/api';
+import { useCollection } from '@/features/collections/hooks/useCollection';
+import { useQuery } from '@tanstack/react-query';
 import { useMap } from '@/features/places/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
 import { Colors } from '@/constants/theme';
@@ -45,38 +47,25 @@ export default function CollectionDetailScreen() {
   const shapeSourceRef = useRef<ShapeSource>(null);
   const { toast, showError, hideToast } = useToast();
 
-  const [collectionName, setCollectionName] = useState('');
-  const [collectionPlaces, setCollectionPlaces] = useState<PlaceSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [followUser, setFollowUser] = useState(false);
 
-  const loadCollection = useCallback(async () => {
-    if (!id) return;
-    try {
-      setLoading(true);
-      const [collectionRes, placesRes] = await Promise.all([
-        getCollection(id),
-        getAllPlacesSummary(),
-      ]);
-      if (!collectionRes?.collection || !placesRes?.places) {
-        showError('Impossible de charger la collection');
-        return;
-      }
-      setCollectionName(collectionRes.collection.name);
-      const placeIds = new Set(collectionRes.collection.places.map((collectionPlace: { placeId: string }) => collectionPlace.placeId));
-      setCollectionPlaces(placesRes.places.filter((place) => placeIds.has(place.id)));
-    } catch {
-      showError('Impossible de charger la collection');
-    } finally {
-      setLoading(false);
-    }
-  }, [id, showError]);
+  const { data: collectionData, isLoading: loadingCollection } = useCollection(id);
+  const { data: placesData } = useQuery({
+    queryKey: ['places', 'summary'],
+    queryFn: async () => {
+      const res = await getAllPlacesSummary();
+      return res?.places ?? [];
+    },
+    staleTime: 30_000,
+  });
 
-  useFocusEffect(
-    useCallback(() => {
-      loadCollection();
-    }, [loadCollection])
-  );
+  const collectionName = collectionData?.name ?? '';
+  const collectionPlaces = useMemo(() => {
+    if (!collectionData?.places || !placesData) return [];
+    const placeIds = new Set(collectionData.places.map((cp: { placeId: string }) => cp.placeId));
+    return placesData.filter((place) => placeIds.has(place.id));
+  }, [collectionData, placesData]);
+  const loading = loadingCollection;
 
   const validPlaces = useMemo(
     () => collectionPlaces.filter((place) => place.lat != null && place.lon != null && !isNaN(place.lat) && !isNaN(place.lon)),

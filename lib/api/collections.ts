@@ -39,7 +39,7 @@ export async function getCollections(): Promise<{ collections: CollectionSummary
 }
 
 export async function getCollection(collectionId: string): Promise<{ collection: CollectionDetail } | null> {
-  return apiRequest(`/api/collections/${collectionId}`);
+  return apiRequest(`/api/collections/${encodeURIComponent(collectionId)}`);
 }
 
 export async function createCollection(data: {
@@ -62,29 +62,29 @@ export async function updateCollection(collectionId: string, data: {
   isPrivate?: boolean;
   coverImage?: string;
 }): Promise<{ collection: CollectionSummary } | null> {
-  return apiRequest(`/api/collections/${collectionId}`, {
+  return apiRequest(`/api/collections/${encodeURIComponent(collectionId)}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
 export async function deleteCollection(collectionId: string): Promise<{ message: string } | null> {
-  return apiRequest(`/api/collections/${collectionId}`, { method: 'DELETE' });
+  return apiRequest(`/api/collections/${encodeURIComponent(collectionId)}`, { method: 'DELETE' });
 }
 
 export async function duplicateCollection(collectionId: string): Promise<{ collection: CollectionSummary } | null> {
-  return apiRequest(`/api/collections/${collectionId}/duplicate`, { method: 'POST' });
+  return apiRequest(`/api/collections/${encodeURIComponent(collectionId)}/duplicate`, { method: 'POST' });
 }
 
 export async function addPlaceToCollection(collectionId: string, placeId: string): Promise<{ message: string } | null> {
-  return apiRequest(`/api/collections/${collectionId}/places`, {
+  return apiRequest(`/api/collections/${encodeURIComponent(collectionId)}/places`, {
     method: 'POST',
     body: JSON.stringify({ placeId }),
   });
 }
 
 export async function removePlaceFromCollection(collectionId: string, placeId: string): Promise<{ message: string } | null> {
-  return apiRequest(`/api/collections/${collectionId}/places/${placeId}`, { method: 'DELETE' });
+  return apiRequest(`/api/collections/${encodeURIComponent(collectionId)}/places/${encodeURIComponent(placeId)}`, { method: 'DELETE' });
 }
 
 export async function batchUpdateCollectionPlaces(
@@ -92,23 +92,23 @@ export async function batchUpdateCollectionPlaces(
   addPlaceIds: string[],
   removePlaceIds: string[]
 ): Promise<{ message: string; added: number; removed: number } | null> {
-  return apiRequest(`/api/collections/${collectionId}/places/batch`, {
+  return apiRequest(`/api/collections/${encodeURIComponent(collectionId)}/places/batch`, {
     method: 'PUT',
     body: JSON.stringify({ addPlaceIds, removePlaceIds }),
   });
 }
 
 export async function shareCollectionWithGroup(collectionId: string, groupId: string): Promise<{ message: string } | null> {
-  return apiRequest(`/api/collections/${collectionId}/groups`, {
+  return apiRequest(`/api/collections/${encodeURIComponent(collectionId)}/groups`, {
     method: 'POST',
     body: JSON.stringify({ groupId }),
   });
 }
 
 export async function unshareCollectionFromGroup(collectionId: string, groupId: string): Promise<{ message: string } | null> {
-  return apiRequest(`/api/collections/${collectionId}/groups/${groupId}`, { method: 'DELETE' });
+  return apiRequest(`/api/collections/${encodeURIComponent(collectionId)}/groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' });
 }
 
 export async function getPlaceCollections(placeId: string): Promise<{ collectionIds: string[] } | null> {
-  return apiRequest(`/api/collections/places/${placeId}`);
+  return apiRequest(`/api/collections/places/${encodeURIComponent(placeId)}`);
 }

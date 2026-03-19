@@ -1,11 +1,14 @@
 import React from 'react';
-import { View, StyleSheet, Text, Pressable, useColorScheme } from 'react-native';
+import { Platform, View, StyleSheet, Text, Pressable, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useAuth } from '@/lib/auth/useAuthStore';
 import { Colors } from '@/constants/theme';
+
+const useGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
 
 interface MapTabHeaderProps {
   placesCount: number;
@@ -102,38 +105,64 @@ export default function MapTabHeader({
           </Pressable>
 
           {/* Actions */}
-          <View style={styles.actions}>
-            <Pressable
-              onPress={onHelpPress ?? (() => {})}
-              accessibilityRole="button"
-              accessibilityLabel="Aide"
-              style={({ pressed }) => [
-                styles.actionButton,
-                {
-                  backgroundColor: pillBg,
-                  borderColor: pillBorder,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
+          {useGlass ? (
+            <GlassView
+              glassEffectStyle="regular"
+              isInteractive
+              style={styles.glassActionsBar}
             >
-              <Ionicons name="help-circle-outline" size={20} color={theme.text} />
-            </Pressable>
-            <Pressable
-              onPress={onAddPress ?? (() => {})}
-              accessibilityRole="button"
-              accessibilityLabel="Ajouter un lieu"
-              style={({ pressed }) => [
-                styles.actionButton,
-                {
-                  backgroundColor: pillBg,
-                  borderColor: pillBorder,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Ionicons name="add" size={20} color={theme.text} />
-            </Pressable>
-          </View>
+              <Pressable
+                onPress={onHelpPress ?? (() => {})}
+                accessibilityRole="button"
+                accessibilityLabel="Aide"
+                style={styles.glassActionPressable}
+              >
+                <Ionicons name="help-circle-outline" size={20} color={theme.text} />
+              </Pressable>
+              <View style={[styles.glassActionDivider, { backgroundColor: theme.border }]} />
+              <Pressable
+                onPress={onAddPress ?? (() => {})}
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter un lieu"
+                style={styles.glassActionPressable}
+              >
+                <Ionicons name="add" size={20} color={theme.text} />
+              </Pressable>
+            </GlassView>
+          ) : (
+            <View style={styles.actions}>
+              <Pressable
+                onPress={onHelpPress ?? (() => {})}
+                accessibilityRole="button"
+                accessibilityLabel="Aide"
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  {
+                    backgroundColor: pillBg,
+                    borderColor: pillBorder,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="help-circle-outline" size={20} color={theme.text} />
+              </Pressable>
+              <Pressable
+                onPress={onAddPress ?? (() => {})}
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter un lieu"
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  {
+                    backgroundColor: pillBg,
+                    borderColor: pillBorder,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="add" size={20} color={theme.text} />
+              </Pressable>
+            </View>
+          )}
         </View>
       </BlurView>
     </View>
@@ -202,15 +231,34 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 0,
     marginLeft: 12,
   },
   actionButton: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
+  },
+  glassActionsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    borderRadius: 20,
+    marginLeft: 12,
+    overflow: 'hidden',
+  },
+  glassActionPressable: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  glassActionDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 20,
+    opacity: 0.3,
   },
 });

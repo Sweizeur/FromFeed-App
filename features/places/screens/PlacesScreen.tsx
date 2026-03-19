@@ -1,9 +1,9 @@
-import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, Platform, useColorScheme } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useSearchText } from '@/features/places/context/SearchContext';
+import { useFiltersStore } from '@/features/places/store/useFiltersStore';
 import PlacesList from '@/features/places/components/PlacesList';
 import PlaceFilters from '@/features/places/components/PlaceFilters';
 import { usePlaces } from '@/features/places/hooks/usePlaces';
@@ -20,9 +20,11 @@ export default function PlacesScreen() {
   const router = useRouter();
   const headerHeight = useHeaderHeight();
   const colorScheme = useColorScheme();
-  const { searchText } = useSearchText();
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const searchText = useFiltersStore((s) => s.searchText);
+  const selectedCategory = useFiltersStore((s) => s.selectedCategory);
+  const selectedType = useFiltersStore((s) => s.selectedType);
+  const setSelectedCategory = useFiltersStore((s) => s.setCategory);
+  const setSelectedType = useFiltersStore((s) => s.setType);
   const targetPadding = headerHeight > 0 ? headerHeight : FALLBACK_HEADER_OFFSET;
   const animatedPaddingTop = useSharedValue(targetPadding);
   const isDark = colorScheme === 'dark';
