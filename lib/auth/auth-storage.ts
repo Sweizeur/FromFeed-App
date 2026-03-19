@@ -7,8 +7,8 @@ import {
   USER_STORAGE_KEY,
   EXPIRES_AT_STORAGE_KEY,
   SECURE_STORE_IOS_OPTIONS,
-} from './auth-config';
-import type { AuthUser } from './auth-config';
+} from '@/lib/auth/auth-config';
+import type { AuthUser } from '@/lib/auth/auth-config';
 
 export async function getStoredToken(): Promise<string | null> {
   try {
