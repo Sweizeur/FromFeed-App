@@ -15,6 +15,7 @@ import {
   CircleLayer,
   SymbolLayer,
   LocationPuck,
+  StyleImport,
 } from '@rnmapbox/maps';
 import LinkBottomSheet from '@/features/places/components/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
@@ -31,17 +32,19 @@ import MapTabHeader from '@/features/places/components/MapTabHeader';
 import LinkLoadBanner from '@/features/places/components/LinkLoadBanner';
 import { router } from 'expo-router';
 import { placesToGeoJSON } from '@/features/places/utils/placesToGeoJSON';
-
-const CLUSTER_RED = '#E53935';
-const MAPBOX_STYLE_LIGHT = 'mapbox://styles/mapbox/standard';
-const MAPBOX_STYLE_DARK = 'mapbox://styles/mapbox/standard';
+import {
+  useMapStyleConfig,
+  CLUSTER_LAYER_STYLE,
+  CLUSTER_COUNT_LAYER_STYLE,
+  CLUSTER_SOURCE_PROPS,
+} from '@/features/places/constants/map-config';
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = Colors[isDark ? 'dark' : 'light'];
-  const mapStyle = isDark ? MAPBOX_STYLE_LIGHT : MAPBOX_STYLE_DARK;
+  const { styleURL: mapStyle, config: mapConfig } = useMapStyleConfig();
 
   const {
     placesSummary,
@@ -171,26 +174,6 @@ export default function MapScreen() {
     [followUser, isProgrammaticChange, stopWatchingUser]
   );
 
-  const clusterLayerStyle = useMemo(
-    () => ({
-      circleRadius: 18,
-      circleColor: CLUSTER_RED,
-      circleStrokeWidth: 2,
-      circleStrokeColor: '#fff',
-      circlePitchAlignment: 'viewport' as const,
-    }),
-    []
-  );
-  const clusterCountLayerStyle = useMemo(
-    () =>
-      ({
-        textField: ['get', 'point_count_abbreviated'],
-        textSize: 12,
-        textColor: '#fff',
-        textPitchAlignment: 'viewport',
-      }) as const,
-    []
-  );
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -221,6 +204,11 @@ export default function MapScreen() {
               projection="globe"
               onRegionDidChange={handleRegionDidChange}
             >
+              <StyleImport
+                id="basemap"
+                existing
+                config={mapConfig}
+              />
               <Camera
                 ref={cameraRef}
                 defaultSettings={{
@@ -241,20 +229,18 @@ export default function MapScreen() {
                 ref={shapeSourceRef}
                 id="places"
                 shape={geoJson}
-                cluster
-                clusterRadius={15}
-                clusterMaxZoomLevel={14}
+                {...CLUSTER_SOURCE_PROPS}
                 onPress={handleShapePress as (e: unknown) => void}
               >
                 <CircleLayer
                   id="places-clusters"
                   filter={['has', 'point_count']}
-                  style={clusterLayerStyle}
+                  style={CLUSTER_LAYER_STYLE}
                 />
                 <SymbolLayer
                   id="places-cluster-count"
                   filter={['has', 'point_count']}
-                  style={clusterCountLayerStyle as Record<string, unknown>}
+                  style={CLUSTER_COUNT_LAYER_STYLE as Record<string, unknown>}
                 />
               </ShapeSource>
               <MapMarkers

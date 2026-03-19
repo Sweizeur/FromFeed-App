@@ -14,14 +14,15 @@ import {
   ShapeSource,
   CircleLayer,
   SymbolLayer,
-  MarkerView,
   LocationPuck,
+  StyleImport,
 } from '@rnmapbox/maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from '@/components/common/Toast';
 import GlassButton from '@/components/ui/GlassButton';
+import MapMarkers from '@/features/places/components/MapMarkers';
 import { getAllPlacesSummary, type PlaceSummary } from '@/lib/api';
 import { useCollection } from '@/features/collections/hooks/useCollection';
 import { useQuery } from '@tanstack/react-query';
@@ -29,10 +30,12 @@ import { useMap } from '@/features/places/hooks/useMap';
 import { useToast } from '@/hooks/useToast';
 import { Colors } from '@/constants/theme';
 import { placesToGeoJSON } from '@/features/places/utils/placesToGeoJSON';
-
-const CLUSTER_RED = '#E53935';
-const MAPBOX_STYLE_LIGHT = 'mapbox://styles/mapbox/standard';
-const MAPBOX_STYLE_DARK = 'mapbox://styles/mapbox/standard';
+import {
+  useMapStyleConfig,
+  CLUSTER_LAYER_STYLE,
+  CLUSTER_COUNT_LAYER_STYLE,
+  CLUSTER_SOURCE_PROPS,
+} from '@/features/places/constants/map-config';
 
 export default function CollectionDetailScreen() {
   const router = useRouter();
@@ -41,7 +44,7 @@ export default function CollectionDetailScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = Colors[isDark ? 'dark' : 'light'];
-  const mapStyle = isDark ? MAPBOX_STYLE_LIGHT : MAPBOX_STYLE_DARK;
+  const { styleURL: mapStyle, config: mapConfig } = useMapStyleConfig();
 
   const { region, loadingLocation, cameraRef, animateToUser, startWatchingUser, stopWatchingUser, isProgrammaticChange, location } = useMap();
   const shapeSourceRef = useRef<ShapeSource>(null);
@@ -202,6 +205,7 @@ export default function CollectionDetailScreen() {
             projection="globe"
             onRegionDidChange={handleRegionDidChange}
           >
+            <StyleImport id="basemap" existing config={mapConfig} />
             <Camera
               ref={cameraRef}
               defaultSettings={{
@@ -218,54 +222,25 @@ export default function CollectionDetailScreen() {
               ref={shapeSourceRef}
               id="collection-places"
               shape={geoJson}
-              cluster
-              clusterRadius={15}
-              clusterMaxZoomLevel={14}
+              {...CLUSTER_SOURCE_PROPS}
               onPress={handleShapePress as (e: unknown) => void}
             >
               <CircleLayer
                 id="collection-clusters"
                 filter={['has', 'point_count']}
-                style={{
-                  circleRadius: 18,
-                  circleColor: CLUSTER_RED,
-                  circleStrokeWidth: 2,
-                  circleStrokeColor: '#fff',
-                  circlePitchAlignment: 'viewport',
-                }}
+                style={CLUSTER_LAYER_STYLE}
               />
               <SymbolLayer
                 id="collection-cluster-count"
                 filter={['has', 'point_count']}
-                style={{
-                  textField: ['get', 'point_count_abbreviated'],
-                  textSize: 12,
-                  textColor: '#fff',
-                  textPitchAlignment: 'viewport',
-                }}
+                style={CLUSTER_COUNT_LAYER_STYLE as Record<string, unknown>}
               />
             </ShapeSource>
-            {validPlaces.map((place) => (
-              <MarkerView
-                key={place.id}
-                coordinate={[place.lon!, place.lat!]}
-                allowOverlap={false}
-              >
-                <View
-                  style={[
-                    markerStyles.emojiBox,
-                    {
-                      backgroundColor: theme.surface,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                >
-                  <Text style={markerStyles.emoji}>
-                    {place.markerEmoji ?? '📍'}
-                  </Text>
-                </View>
-              </MarkerView>
-            ))}
+            <MapMarkers
+              places={validPlaces}
+              theme={theme}
+              onPlacePress={() => {}}
+            />
           </MapView>
         )}
         {!loadingLocation && !region && (
@@ -355,25 +330,4 @@ const styles = StyleSheet.create({
   },
 });
 
-const MARKER_BOX = 40;
-
-const markerStyles = StyleSheet.create({
-  emojiBox: {
-    width: MARKER_BOX,
-    height: MARKER_BOX,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: MARKER_BOX / 2,
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 4,
-  },
-  emoji: {
-    fontSize: 22,
-    textAlign: 'center',
-  },
-});
 
