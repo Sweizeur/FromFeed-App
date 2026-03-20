@@ -175,6 +175,7 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     zIndex: 10,
+    overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 20,
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
   },
   blur: {
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: 'visible',
     borderWidth: 1,
   },
   row: {
@@ -191,6 +192,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 10,
     paddingHorizontal: 12,
+    overflow: 'visible',
   },
   profile: {
     flexDirection: 'row',
@@ -233,6 +235,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 0,
     marginLeft: 12,
+    overflow: 'visible',
   },
   actionButton: {
     width: 40,
@@ -245,16 +248,19 @@ const styles = StyleSheet.create({
   glassActionsBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 40,
-    borderRadius: 20,
+    height: 44,
+    borderRadius: 22,
     marginLeft: 12,
-    overflow: 'hidden',
+    marginVertical: -2,
+    padding: 2,
+    overflow: 'visible',
   },
   glassActionPressable: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 18,
   },
   glassActionDivider: {
     width: StyleSheet.hairlineWidth,

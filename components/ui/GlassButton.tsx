@@ -1,7 +1,7 @@
-import React from 'react';
-import { Platform, Pressable, Text, View, StyleSheet, type ViewStyle, type TextStyle } from 'react-native';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import React from 'react';
+import { Platform, Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
 const useGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
 
@@ -143,12 +143,15 @@ export default function GlassButton({
 const styles = StyleSheet.create({
   wrapper: {
     alignSelf: 'flex-start',
+    padding: 2,
+    margin: -2,
+    overflow: 'visible',
   },
   glass: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   fallback: {
     flexDirection: 'row',

@@ -12,6 +12,7 @@ interface PlaceFiltersProps {
   onTypeChange: (type: string | null) => void;
   /** Apparence pour le dark mode (défaut: apparence système) */
   colorScheme?: 'light' | 'dark' | null;
+  transparentBackground?: boolean;
 }
 
 export default function PlaceFilters({
@@ -21,6 +22,7 @@ export default function PlaceFilters({
   onCategoryChange,
   onTypeChange,
   colorScheme: colorSchemeProp,
+  transparentBackground = false,
 }: PlaceFiltersProps) {
   const systemScheme = useColorScheme();
   const isDark = (colorSchemeProp ?? systemScheme) === 'dark';
@@ -30,7 +32,10 @@ export default function PlaceFilters({
     () =>
       isDark
         ? {
-            container: { backgroundColor: theme.background, borderBottomColor: theme.border },
+            container: {
+              backgroundColor: transparentBackground ? 'transparent' : theme.background,
+              borderBottomColor: transparentBackground ? 'transparent' : theme.border,
+            },
             glassBg: '#252628' as string | undefined,
             glassBorder: '#3C3E40' as string | undefined,
             textColor: theme.icon,
@@ -38,14 +43,17 @@ export default function PlaceFilters({
             activeTextColor: theme.background,
           }
         : {
-            container: { backgroundColor: theme.background, borderBottomColor: theme.border },
+            container: {
+              backgroundColor: transparentBackground ? 'transparent' : theme.background,
+              borderBottomColor: transparentBackground ? 'transparent' : theme.border,
+            },
             glassBg: undefined as string | undefined,
             glassBorder: undefined as string | undefined,
             textColor: theme.icon,
             activeTint: theme.text,
             activeTextColor: theme.surface,
           },
-    [isDark, theme]
+    [isDark, theme, transparentBackground]
   );
 
   // Extraire les types uniques selon la catégorie sélectionnée
@@ -67,7 +75,6 @@ export default function PlaceFilters({
 
   const goBackToCategories = () => {
     onCategoryChange(null);
-    onTypeChange(null);
   };
 
   return (
@@ -77,6 +84,7 @@ export default function PlaceFilters({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.scroll}
           contentContainerStyle={styles.categoryContainer}
         >
           <GlassButton
@@ -115,6 +123,7 @@ export default function PlaceFilters({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.scroll}
           contentContainerStyle={styles.typeContainer}
         >
           <GlassButton
@@ -162,17 +171,23 @@ export default function PlaceFilters({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderBottomWidth: 1,
+    overflow: 'visible',
+  },
+  scroll: {
+    overflow: 'visible',
   },
   categoryContainer: {
     gap: 8,
     paddingRight: 16,
+    paddingVertical: 2,
     alignItems: 'center',
   },
   typeContainer: {
     gap: 8,
     paddingRight: 16,
+    paddingVertical: 2,
     alignItems: 'center',
   },
   backButtonSpacing: {
