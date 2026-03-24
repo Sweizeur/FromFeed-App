@@ -66,8 +66,13 @@ export default function PlacesScreen() {
 
   const filteredPlaces = useMemo(() => {
     return placesSummary.filter((place) => {
-      if (selectedCategory && place.category !== selectedCategory) return false;
-      if (selectedCategory && selectedType && !matchesTypeFilter(place.type, selectedType)) return false;
+      if (selectedCategory === 'Non classé') {
+        if (place.category != null) return false;
+        if (!place.types || place.types.length === 0) return false;
+      } else if (selectedCategory && place.category !== selectedCategory) {
+        return false;
+      }
+      if (selectedCategory && selectedType && !place.types?.some((t) => matchesTypeFilter(t, selectedType))) return false;
       const q = searchText.trim().toLowerCase();
       if (!q) return true;
       const haystack = [
@@ -77,6 +82,7 @@ export default function PlacesScreen() {
         place.address,
         place.googleFormattedAddress,
         place.category,
+        ...(place.types ?? []),
       ]
         .filter(Boolean)
         .join(' ')

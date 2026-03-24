@@ -56,54 +56,58 @@ export default function MapTabHeader({
       ]}
       pointerEvents="box-none"
     >
-      <BlurView
-        intensity={isDark ? 70 : 60}
-        tint={isDark ? 'dark' : 'light'}
-        style={[
-          styles.blur,
-          {
-            backgroundColor: isDark
-              ? 'rgba(28,28,30,0.85)'
-              : 'rgba(250,248,242,0.88)',
-            borderColor: pillBorder,
-          },
-        ]}
-      >
-        <View style={styles.row}>
-          {/* Profile section */}
-          <Pressable
-            style={styles.profile}
-            onPress={onProfilePress}
-            accessibilityRole="button"
-            accessibilityLabel="Profil"
-          >
-            <View
-              style={[styles.avatarWrap, { backgroundColor: pillBg }]}
+      <View style={styles.headerShell} pointerEvents="box-none">
+        <BlurView
+          intensity={isDark ? 70 : 60}
+          tint={isDark ? 'dark' : 'light'}
+          style={[
+            styles.blur,
+            {
+              backgroundColor: isDark
+                ? 'rgba(28,28,30,0.85)'
+                : 'rgba(250,248,242,0.88)',
+              borderColor: pillBorder,
+            },
+          ]}
+        >
+          <View style={styles.row}>
+            {/* Profile section */}
+            <Pressable
+              style={styles.profile}
+              onPress={onProfilePress}
+              accessibilityRole="button"
+              accessibilityLabel="Profil"
             >
-              {user?.image ? (
-                <Image source={{ uri: user.image }} style={styles.avatar} />
-              ) : (
-                <Text style={[styles.avatarInitial, { color: theme.text }]}>
-                  {initial}
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.textCol}>
-              <Text
-                style={[styles.username, { color: theme.text }]}
-                numberOfLines={1}
+              <View
+                style={[styles.avatarWrap, { backgroundColor: pillBg }]}
               >
-                {username}
-              </Text>
-              <Pressable onPress={onPlacesPress} hitSlop={4}>
-                <Text style={[styles.placesCount, { color: theme.icon }]}>
-                  {placesCount} lieu{placesCount !== 1 ? 'x' : ''}
-                </Text>
-              </Pressable>
-            </View>
-          </Pressable>
+                {user?.image ? (
+                  <Image source={{ uri: user.image }} style={styles.avatar} />
+                ) : (
+                  <Text style={[styles.avatarInitial, { color: theme.text }]}>
+                    {initial}
+                  </Text>
+                )}
+              </View>
 
+              <View style={styles.textCol}>
+                <Text
+                  style={[styles.username, { color: theme.text }]}
+                  numberOfLines={1}
+                >
+                  {username}
+                </Text>
+                <Pressable onPress={onPlacesPress} hitSlop={4}>
+                  <Text style={[styles.placesCount, { color: theme.icon }]}>
+                    {placesCount} lieu{placesCount !== 1 ? 'x' : ''}
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </View>
+        </BlurView>
+
+        <View style={styles.actionsOverlay} pointerEvents="box-none">
           {/* Actions */}
           {useGlass ? (
             <GlassView
@@ -164,7 +168,7 @@ export default function MapTabHeader({
             </View>
           )}
         </View>
-      </BlurView>
+      </View>
     </View>
   );
 }
@@ -183,13 +187,16 @@ const styles = StyleSheet.create({
   },
   blur: {
     borderRadius: 14,
-    overflow: 'visible',
+    overflow: 'hidden',
     borderWidth: 1,
+  },
+  headerShell: {
+    position: 'relative',
+    overflow: 'visible',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 10,
     paddingHorizontal: 12,
     overflow: 'visible',
@@ -199,6 +206,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     minWidth: 0,
+    marginRight: 56,
   },
   avatarWrap: {
     width: 40,
@@ -234,7 +242,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 0,
-    marginLeft: 12,
     overflow: 'visible',
   },
   actionButton: {
@@ -250,9 +257,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 44,
     borderRadius: 22,
-    marginLeft: 12,
     marginVertical: -2,
     padding: 2,
+    overflow: 'visible',
+  },
+  actionsOverlay: {
+    position: 'absolute',
+    right: 12,
+    top: 10,
+    bottom: 10,
+    justifyContent: 'center',
     overflow: 'visible',
   },
   glassActionPressable: {

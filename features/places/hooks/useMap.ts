@@ -3,7 +3,7 @@ import type { Camera } from '@rnmapbox/maps';
 import type React from 'react';
 import * as Location from 'expo-location';
 import type { Place, PlaceSummary } from '@/features/places/types';
-const ANIMATION_DURATION_MS = 1000;
+const ANIMATION_DURATION_MS = 650;
 const PROGRAMMATIC_GRACE_MS = 1500;
 const DEFAULT_ZOOM = 14;
 
@@ -96,10 +96,6 @@ export function useMap() {
         },
         (newLocation) => {
           setLocation(newLocation);
-          if (!cameraRef.current) return;
-          markProgrammaticAnimation();
-          const { longitude, latitude } = newLocation.coords;
-          cameraRef.current.flyTo([longitude, latitude], ANIMATION_DURATION_MS);
         }
       );
       watchSubscriptionRef.current = sub;

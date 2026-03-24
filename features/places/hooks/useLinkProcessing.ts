@@ -3,6 +3,7 @@ import { AppState, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { createLinkPreviewTask, getTaskStatus } from '@/lib/api';
+import { subscribeTaskViaWs } from '@/lib/api/tasks-ws';
 import { useAddingPlace } from '@/features/places/context/AddingPlaceContext';
 import { useToast } from '@/hooks/useToast';
 import { useShareHandler } from '@/hooks/useShareHandler';
@@ -34,6 +35,8 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollStartRef = useRef<number>(0);
   const isRefreshingOnAppStateRef = useRef(false);
+  // cancel() retourné par subscribeTaskViaWs — permet de couper le WS si nécessaire
+  const cancelWsRef = useRef<(() => void) | null>(null);
 
   const clearPendingTask = useCallback(() => {
     setPendingTaskId(null);
@@ -44,6 +47,10 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
     if (pollTimeoutRef.current) {
       clearTimeout(pollTimeoutRef.current);
       pollTimeoutRef.current = null;
+    }
+    if (cancelWsRef.current) {
+      cancelWsRef.current();
+      cancelWsRef.current = null;
     }
   }, [setAddingPlace]);
 
@@ -115,6 +122,37 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
     [checkTaskStatus, clearPendingTask, showError, setLinkLoadStatus]
   );
 
+  const startListeningForTask = useCallback(
+    (taskId: string) => {
+      // Couper un éventuel WS précédent
+      if (cancelWsRef.current) { cancelWsRef.current(); cancelWsRef.current = null; }
+
+      cancelWsRef.current = subscribeTaskViaWs(
+        taskId,
+        // WS a reçu le résultat
+        async (update) => {
+          cancelWsRef.current = null;
+          if (update.status === 'done' && update.result) {
+            setLinkLoadStatus('success');
+            await handleSaveLink(update.result);
+            clearPendingTask();
+          } else {
+            showError(update.error || "L'analyse du lien a échoué.");
+            setLinkLoadStatus('idle');
+            clearPendingTask();
+          }
+        },
+        // WS indisponible → fallback polling
+        () => {
+          cancelWsRef.current = null;
+          pollStartRef.current = Date.now();
+          scheduleNextPoll(taskId, 0);
+        },
+      );
+    },
+    [handleSaveLink, clearPendingTask, showError, setLinkLoadStatus, scheduleNextPoll],
+  );
+
   const handleTaskCreated = useCallback(
     (taskId: string) => {
       setPendingTaskId(taskId);
@@ -123,10 +161,9 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
       setProcessingUrl('En cours...');
       processingUrlRef.current = 'pending';
       AsyncStorage.setItem(PENDING_LINK_TASK_ID, taskId);
-      pollStartRef.current = Date.now();
-      scheduleNextPoll(taskId, 0);
+      startListeningForTask(taskId);
     },
-    [scheduleNextPoll, setAddingPlace, setLinkLoadStatus]
+    [startListeningForTask, setAddingPlace, setLinkLoadStatus]
   );
 
   // Cleanup poll timeout on unmount
@@ -164,13 +201,12 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
       setLinkLoadStatus('loading');
       setProcessingUrl('En cours...');
       processingUrlRef.current = 'pending';
-      pollStartRef.current = Date.now();
-      scheduleNextPoll(stored, 0);
+      startListeningForTask(stored);
     })();
     return () => {
       cancelled = true;
     };
-  }, [scheduleNextPoll, setAddingPlace, setLinkLoadStatus]);
+  }, [startListeningForTask, setAddingPlace, setLinkLoadStatus]);
 
   // Handle shared URLs (from share intent)
   const handleSharedUrl = useCallback(
@@ -185,8 +221,7 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
           setLinkLoadStatus('loading');
           setProcessingUrl(url);
           AsyncStorage.setItem(PENDING_LINK_TASK_ID, response.taskId);
-          pollStartRef.current = Date.now();
-          scheduleNextPoll(response.taskId, 0);
+          startListeningForTask(response.taskId);
         } else {
           showError("Impossible de lancer l'analyse du lien partagé.");
           processingUrlRef.current = null;
@@ -205,7 +240,7 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
         setLinkLoadStatus('idle');
       }
     },
-    [showError, scheduleNextPoll, setAddingPlace, setLinkLoadStatus]
+    [showError, startListeningForTask, setAddingPlace, setLinkLoadStatus]
   );
 
   useShareHandler(handleSharedUrl);
@@ -258,16 +293,17 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
         if (isRefreshingOnAppStateRef.current) return;
         isRefreshingOnAppStateRef.current = true;
         try {
+          // Vérification HTTP unique au retour foreground (WS peut être mort)
           const done = await checkTaskStatus(taskId);
           if (done) {
             await onPlaceSaved();
           } else {
+            // Tâche encore en cours : relancer l'écoute WS (fallback polling si WS indispo)
             setPendingTaskId(taskId);
             setAddingPlace(true);
             setLinkLoadStatus('loading');
             setProcessingUrl('En cours...');
-            pollStartRef.current = Date.now();
-            scheduleNextPoll(taskId, 0);
+            startListeningForTask(taskId);
           }
         } catch {}
         finally {
@@ -297,7 +333,7 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
     processingUrl,
     onPlaceSaved,
     checkTaskStatus,
-    scheduleNextPoll,
+    startListeningForTask,
     setAddingPlace,
     setLinkLoadStatus,
   ]);

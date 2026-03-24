@@ -75,7 +75,7 @@ export interface PlaceVideoFeedItem {
   placeName?: string | null;
   placeAddress?: string | null;
   category?: string | null;
-  type?: string | null;
+  types?: string[];
 }
 
 export interface Place {
@@ -106,7 +106,7 @@ export interface Place {
   googleOpeningHours?: string | null;
   userRating?: number | null;
   category?: string | null;
-  type?: string | null;
+  types?: string[];
   createdAt: string;
   lastUpdated: string;
 }
@@ -139,7 +139,7 @@ export interface PlaceSummary {
   canonicalUrl: string;
   websiteUrl?: string | null;
   category?: string | null;
-  type?: string | null;
+  types?: string[];
   markerEmoji?: string | null;
   userRating?: number | null;
   collectionIds?: string[];

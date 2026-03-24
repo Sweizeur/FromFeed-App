@@ -61,17 +61,25 @@ export async function sendAIMessageStreaming(
       };
 
       ws.onopen = () => {
-        devLog('[API] WebSocket connecté, en attente du message de bienvenue...');
+        devLog('[API] WebSocket connecté, envoi du token d\'authentification...');
+        try {
+          ws.send(JSON.stringify({ type: 'auth', token }));
+        } catch (e) {
+          const err = e instanceof Error ? e : new Error('Impossible d\'envoyer auth via WebSocket');
+          onError(err);
+          settle('reject', err);
+        }
       };
 
       ws.onmessage = (event) => {
         try {
-          if (!event.data || typeof event.data !== 'string') {
-            devWarn('[API] Message WebSocket avec type invalide:', typeof event.data);
+          if (!event.data) {
+            devWarn('[API] Message WebSocket vide');
             return;
           }
-          if (event.data.length > 100000) {
-            devError('[API] Message WebSocket trop volumineux:', event.data.length);
+          const raw = typeof event.data === 'string' ? event.data : String(event.data);
+          if (raw.length > 100000) {
+            devError('[API] Message WebSocket trop volumineux:', raw.length);
             const err = new Error('Message WebSocket trop volumineux');
             onError(err);
             ws.close();
@@ -81,9 +89,9 @@ export async function sendAIMessageStreaming(
 
           let data: { type: string; content?: string; response?: string; conversationId?: string; message?: string };
           try {
-            data = JSON.parse(event.data);
+            data = JSON.parse(raw);
           } catch {
-            devError('[API] Erreur de parsing JSON:', event.data.substring(0, 100));
+            devError('[API] Erreur de parsing JSON:', raw.substring(0, 100));
             if (!isComplete) {
               const err = new Error('Erreur de parsing JSON WebSocket');
               onError(err);
@@ -100,8 +108,6 @@ export async function sendAIMessageStreaming(
 
           if (data.type === 'connected') {
             devLog('[API] WebSocket:', data.message);
-            devLog('[API] Envoi du token d\'authentification...');
-            ws.send(JSON.stringify({ type: 'auth', token }));
             return;
           }
 

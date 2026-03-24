@@ -130,9 +130,9 @@ const PlaceCard = React.memo(function PlaceCard({
           </Text>
         </View>
 
-        {place.type && (
+        {place.types && place.types.length > 0 && (
           <View style={styles.categoryContainer}>
-            <Text style={[styles.categoryText, themed.categoryText]}>{place.type}</Text>
+            <Text style={[styles.categoryText, themed.categoryText]}>{place.types.join(', ')}</Text>
           </View>
         )}
 

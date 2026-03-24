@@ -1,7 +1,7 @@
-import { useState, useCallback, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getAllPlacesSummary, getPlaceDetails } from '@/lib/api';
 import type { Place, PlaceSummary } from '@/features/places/types';
+import { getAllPlacesSummary, getPlaceDetails } from '@/lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useRef, useState } from 'react';
 
 const STALE_TIME = 30 * 1000; // 30 seconds
 

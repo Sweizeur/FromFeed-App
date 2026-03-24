@@ -18,6 +18,7 @@ import {
   SymbolLayer,
   LocationPuck,
   StyleImport,
+  UserTrackingMode,
 } from '@rnmapbox/maps';
 import LinkBottomSheet from '@/features/places/components/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
@@ -69,7 +70,6 @@ export default function MapScreen() {
     animateToUser,
     startWatchingUser,
     stopWatchingUser,
-    isProgrammaticChange,
     location,
   } = useMap();
 
@@ -98,7 +98,7 @@ export default function MapScreen() {
   const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
   const [linkInput, setLinkInput] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<
-    Array<{ category: 'Restauration' | 'Activité'; type: string | null }>
+    Array<{ category: 'Restauration' | 'Activité' | 'Non classé'; type: string | null }>
   >([]);
   const setListCategory = useFiltersStore((s) => s.setCategory);
   const setListType = useFiltersStore((s) => s.setType);
@@ -140,9 +140,14 @@ export default function MapScreen() {
 
     return placesSummary.filter((place) => {
       return selectedFilters.some((filter) => {
-        if (place.category !== filter.category) return false;
+        if (filter.category === 'Non classé') {
+          if (place.category != null) return false;
+          if (!place.types || place.types.length === 0) return false;
+        } else if (place.category !== filter.category) {
+          return false;
+        }
         if (filter.type === null) return true;
-        return matchesTypeFilter(place.type, filter.type);
+        return place.types?.some((t) => matchesTypeFilter(t, filter.type)) ?? false;
       });
     });
   }, [placesSummary, selectedFilters]);
@@ -216,13 +221,12 @@ export default function MapScreen() {
   const handleRegionDidChange = useCallback(
     (regionFeature: { properties?: { isUserInteraction?: boolean } }) => {
       if (!regionFeature?.properties?.isUserInteraction) return;
-      if (isProgrammaticChange()) return;
       if (followUser) {
         setFollowUser(false);
         stopWatchingUser();
       }
     },
-    [followUser, isProgrammaticChange, stopWatchingUser]
+    [followUser, stopWatchingUser]
   );
 
 
@@ -254,7 +258,7 @@ export default function MapScreen() {
                   return;
                 }
                 setSelectedFilters([
-                  { category: category as 'Restauration' | 'Activité', type: null },
+                  { category: category as 'Restauration' | 'Activité' | 'Non classé', type: null },
                 ]);
               }}
               onTypeChange={(type) => {
@@ -291,6 +295,8 @@ export default function MapScreen() {
                 }}
                 animationDuration={1000}
                 animationMode="flyTo"
+                followUserLocation={followUser}
+                followUserMode={UserTrackingMode.Follow}
               />
               {location && (
                 <LocationPuck
