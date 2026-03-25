@@ -4,8 +4,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   Keyboard,
-  Pressable,
-  Platform,
   TouchableWithoutFeedback,
   useColorScheme,
 } from 'react-native';
@@ -19,24 +17,27 @@ import {
   LocationPuck,
   StyleImport,
   UserTrackingMode,
+  type MapState,
 } from '@rnmapbox/maps';
 import LinkBottomSheet from '@/features/places/components/LinkBottomSheet';
 import Toast from '@/components/common/Toast';
 import MapMarkers from '@/features/places/components/MapMarkers';
+import PlaceCardOverlay from '@/features/places/components/PlaceCardOverlay';
+import MapActionButtons from '@/features/places/components/MapActionButtons';
 import type { Place, PlaceSummary } from '@/features/places/types';
 import { usePlaces } from '@/features/places/hooks/usePlaces';
 import { useMap } from '@/features/places/hooks/useMap';
+import { useCardAnimation } from '@/features/places/hooks/useCardAnimation';
 import { useFiltersStore } from '@/features/places/store/useFiltersStore';
 import { useToast } from '@/hooks/useToast';
 import { useLinkProcessing } from '@/features/places/hooks/useLinkProcessing';
 import { useAddingPlace } from '@/features/places/context/AddingPlaceContext';
+import { updatePlaceRating, updatePlaceTested } from '@/lib/api/places';
 import { darkColor, Colors } from '@/constants/theme';
 import MapTabHeader from '@/features/places/components/MapTabHeader';
 import PlaceFilters from '@/features/places/components/PlaceFilters';
 import LinkLoadBanner from '@/features/places/components/LinkLoadBanner';
-import { router } from 'expo-router';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
 import { placesToGeoJSON } from '@/features/places/utils/placesToGeoJSON';
 import { matchesTypeFilter } from '@/utils/typeHierarchy';
 import {
@@ -46,22 +47,27 @@ import {
   CLUSTER_SOURCE_PROPS,
 } from '@/features/places/constants/map-config';
 
-const useLiquidButtons = Platform.OS === 'ios' && isLiquidGlassAvailable();
+type FilterSelection = {
+  category: 'Restauration' | 'Activité' | 'Non classé';
+  type: string | null;
+};
+
+type ShapeFeature = {
+  properties?: Record<string, unknown> | null;
+  geometry?: { coordinates?: number[] };
+};
 
 export default function MapScreen() {
+  const { placeId } = useLocalSearchParams<{ placeId?: string }>();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = Colors[isDark ? 'dark' : 'light'];
   const { styleURL: mapStyle, config: mapConfig } = useMapStyleConfig();
 
-  const {
-    placesSummary,
-    refreshPlaces,
-    loadPlaceDetails,
-    setSelectedPlace,
-  } = usePlaces();
-
+  // ── Data hooks ──
+  const { placesSummary, refreshPlaces, loadPlaceDetails, setSelectedPlace, selectedPlace } =
+    usePlaces();
   const {
     region,
     loadingLocation,
@@ -71,8 +77,8 @@ export default function MapScreen() {
     startWatchingUser,
     stopWatchingUser,
     location,
+    isProgrammaticChange,
   } = useMap();
-
   const { toast, showError, hideToast } = useToast();
   const {
     isAddingPlace,
@@ -83,43 +89,79 @@ export default function MapScreen() {
     setSuccessMessage,
   } = useAddingPlace();
 
-  const shapeSourceRef = useRef<ShapeSource>(null);
-
   const onPlaceSaved = useCallback(async () => {
     await refreshPlaces(true, true);
   }, [refreshPlaces]);
+  const { handleTaskCreated, setProcessingUrl } = useLinkProcessing({ onPlaceSaved });
 
+  // ── Card animation ──
   const {
-    handleTaskCreated,
-    setProcessingUrl,
-  } = useLinkProcessing({ onPlaceSaved });
+    selectedCardPlace,
+    cardPlace,
+    showPlaceCard,
+    dismissPlaceCardAnimated,
+    toggleCardExpansion,
+    cardAppearProgress,
+    cardExpansionProgress,
+    cardPanResponder,
+    expandedFullHeight,
+    navbarClearance,
+  } = useCardAnimation();
 
+  // ── Local state ──
+  const shapeSourceRef = useRef<ShapeSource>(null);
+  const lastIdleCameraRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
+  const lastAppliedPlaceIdRef = useRef<string | null>(null);
   const [followUser, setFollowUser] = useState(false);
   const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
   const [linkInput, setLinkInput] = useState('');
-  const [selectedFilters, setSelectedFilters] = useState<
-    Array<{ category: 'Restauration' | 'Activité' | 'Non classé'; type: string | null }>
-  >([]);
+  const [selectedFilters, setSelectedFilters] = useState<FilterSelection[]>([]);
+
   const setListCategory = useFiltersStore((s) => s.setCategory);
   const setListType = useFiltersStore((s) => s.setType);
   const singleFilterSelection = selectedFilters.length === 1 ? selectedFilters[0] : null;
 
+  // ── Filter sync: Map → List store ──
   useEffect(() => {
-    // Sync one-way: Plan -> Liste
-    // La page plan garde son propre état local; la liste lit le store global.
     if (selectedFilters.length !== 1) {
       setListCategory(null);
       setListType(null);
       return;
     }
-
     const [filter] = selectedFilters;
     setListCategory(filter.category);
     setListType(filter.type);
   }, [selectedFilters, setListCategory, setListType]);
 
+  // ── Filtered data ──
+  const filteredPlaces = useMemo(() => {
+    if (selectedFilters.length === 0) return placesSummary;
+    return placesSummary.filter((place) =>
+      selectedFilters.some((filter) => {
+        if (filter.category === 'Non classé') {
+          if (place.category != null) return false;
+          if (!place.types || place.types.length === 0) return false;
+        } else if (place.category !== filter.category) {
+          return false;
+        }
+        if (filter.type === null) return true;
+        return place.types?.some((t) => matchesTypeFilter(t, filter.type)) ?? false;
+      }),
+    );
+  }, [placesSummary, selectedFilters]);
+
+  const geoJson = useMemo(() => placesToGeoJSON(filteredPlaces), [filteredPlaces]);
+
+  const placesById = useMemo(() => {
+    const m = new Map<string, PlaceSummary>();
+    filteredPlaces.forEach((p) => p?.id && m.set(p.id, p));
+    return m;
+  }, [filteredPlaces]);
+
+  // ── Place callbacks ──
   const handlePlacePress = useCallback(
     async (place: Place | PlaceSummary) => {
+      showPlaceCard(place as PlaceSummary);
       if ('provider' in place && !('createdAt' in place)) {
         try {
           await loadPlaceDetails(place.id);
@@ -132,58 +174,18 @@ export default function MapScreen() {
       }
       await animateToPlace(place);
     },
-    [loadPlaceDetails, setSelectedPlace, animateToPlace, showError]
+    [showPlaceCard, loadPlaceDetails, setSelectedPlace, animateToPlace, showError],
   );
-
-  const filteredPlaces = useMemo(() => {
-    if (selectedFilters.length === 0) return placesSummary;
-
-    return placesSummary.filter((place) => {
-      return selectedFilters.some((filter) => {
-        if (filter.category === 'Non classé') {
-          if (place.category != null) return false;
-          if (!place.types || place.types.length === 0) return false;
-        } else if (place.category !== filter.category) {
-          return false;
-        }
-        if (filter.type === null) return true;
-        return place.types?.some((t) => matchesTypeFilter(t, filter.type)) ?? false;
-      });
-    });
-  }, [placesSummary, selectedFilters]);
-
-  const toggleFilter = useCallback(
-    (category: 'Restauration' | 'Activité', type: string | null) => {
-      setSelectedFilters((prev) => {
-        const exists = prev.some((f) => f.category === category && f.type === type);
-        if (exists) {
-          return prev.filter((f) => !(f.category === category && f.type === type));
-        }
-        return [...prev, { category, type }];
-      });
-    },
-    []
-  );
-  const geoJson = useMemo(
-    () => placesToGeoJSON(filteredPlaces),
-    [filteredPlaces]
-  );
-  const placesById = useMemo(() => {
-    const m = new Map<string, PlaceSummary>();
-    filteredPlaces.forEach((p) => p?.id && m.set(p.id, p));
-    return m;
-  }, [filteredPlaces]);
 
   const handleShapePress = useCallback(
-    async (
-      event: { features: Array<{ properties?: Record<string, unknown> | null; geometry?: { coordinates?: number[] } }> }
-    ) => {
+    async (event: { features: ShapeFeature[] }) => {
       const feature = event.features?.[0];
       if (!feature?.properties) return;
       const props = feature.properties;
       const isCluster = 'point_count' in props && typeof props.point_count === 'number';
       const coords = feature.geometry?.coordinates;
-      const coordPair = coords && coords.length >= 2 ? ([coords[0], coords[1]] as [number, number]) : undefined;
+      const coordPair =
+        coords && coords.length >= 2 ? ([coords[0], coords[1]] as [number, number]) : undefined;
       if (isCluster && shapeSourceRef.current && coordPair) {
         try {
           const zoom = await shapeSourceRef.current.getClusterExpansionZoom(feature as any);
@@ -204,7 +206,7 @@ export default function MapScreen() {
         if (place) await handlePlacePress(place);
       }
     },
-    [placesById, handlePlacePress, cameraRef]
+    [placesById, handlePlacePress, cameraRef],
   );
 
   const handleCenterUser = useCallback(async () => {
@@ -218,18 +220,133 @@ export default function MapScreen() {
     }
   }, [followUser, startWatchingUser, stopWatchingUser, animateToUser]);
 
-  const handleRegionDidChange = useCallback(
-    (regionFeature: { properties?: { isUserInteraction?: boolean } }) => {
-      if (!regionFeature?.properties?.isUserInteraction) return;
-      if (followUser) {
-        setFollowUser(false);
-        stopWatchingUser();
+  const handleRatingChange = useCallback(
+    async (placeId: string, rating: number) => {
+      try {
+        await updatePlaceRating(placeId, rating || null);
+        await refreshPlaces(true, true);
+      } catch {
+        /* silent */
       }
     },
-    [followUser, stopWatchingUser]
+    [refreshPlaces],
   );
 
+  const handleTestedChange = useCallback(
+    async (placeId: string, isTested: boolean) => {
+      try {
+        await updatePlaceTested(placeId, isTested);
+        await refreshPlaces(true, true);
+      } catch {
+        /* silent */
+      }
+    },
+    [refreshPlaces],
+  );
 
+  // ── Map idle ──
+  const handleMapIdle = useCallback(
+    (state: MapState) => {
+      const center = state.properties.center;
+      const snap = {
+        center: [center[0], center[1]] as [number, number],
+        zoom: state.properties.zoom,
+      };
+
+      if (isProgrammaticChange()) {
+        lastIdleCameraRef.current = snap;
+        return;
+      }
+
+      const prev = lastIdleCameraRef.current;
+      const moved =
+        !!prev &&
+        (Math.abs(prev.zoom - snap.zoom) > 0.012 ||
+          Math.abs(prev.center[0] - snap.center[0]) > 1e-6 ||
+          Math.abs(prev.center[1] - snap.center[1]) > 1e-6);
+
+      if (moved) {
+        if (followUser) {
+          setFollowUser(false);
+          stopWatchingUser();
+        }
+        if (selectedCardPlace) {
+          dismissPlaceCardAnimated();
+        }
+      }
+
+      lastIdleCameraRef.current = snap;
+    },
+    [followUser, stopWatchingUser, isProgrammaticChange, dismissPlaceCardAnimated, selectedCardPlace],
+  );
+
+  // ── Filter callbacks ──
+  const handleCategoryChange = useCallback(
+    (category: string | null) => {
+      if (!category) {
+        setSelectedFilters([]);
+        return;
+      }
+      setSelectedFilters([{ category: category as FilterSelection['category'], type: null }]);
+    },
+    [],
+  );
+
+  const handleTypeChange = useCallback(
+    (type: string | null) => {
+      const category = singleFilterSelection?.category;
+      if (!category) return;
+      setSelectedFilters([{ category, type }]);
+    },
+    [singleFilterSelection?.category],
+  );
+
+  // ── Link modal callbacks ──
+  const handleSuccessDismiss = useCallback(() => {
+    setLinkLoadStatus('idle');
+    setSuccessMessage(null);
+  }, [setLinkLoadStatus, setSuccessMessage]);
+
+  const handleLinkModalClose = useCallback(() => {
+    setIsLinkModalVisible(false);
+    setLinkInput('');
+    if (!isAddingPlace) setProcessingUrl(null);
+  }, [isAddingPlace, setProcessingUrl]);
+
+  const handleStartProcessing = useCallback(() => {
+    setAddingPlace(true);
+    setLinkLoadStatus('loading');
+    if (linkInput.trim()) setProcessingUrl(linkInput.trim());
+  }, [setAddingPlace, setLinkLoadStatus, linkInput, setProcessingUrl]);
+
+  const handleLinkError = useCallback(
+    (error: { message?: string; name?: string }) => {
+      const isNetworkError =
+        error?.message?.includes('Network request failed') ||
+        error?.message?.includes('Aborted') ||
+        error?.name === 'AbortError';
+      if (!isNetworkError) {
+        setAddingPlace(false);
+        setLinkLoadStatus('idle');
+        setProcessingUrl(null);
+        showError(error.message || "Une erreur est survenue lors de l'analyse du lien.");
+      }
+    },
+    [setAddingPlace, setLinkLoadStatus, setProcessingUrl, showError],
+  );
+
+  // ── Deep-link: navigate to place from route param ──
+  useEffect(() => {
+    if (!placeId || Array.isArray(placeId)) return;
+    if (lastAppliedPlaceIdRef.current === placeId) return;
+    const placeFromList = placesSummary.find((p) => p.id === placeId);
+    if (!placeFromList) return;
+    lastAppliedPlaceIdRef.current = placeId;
+    void handlePlacePress(placeFromList);
+    router.replace('/(tabs)/map');
+  }, [placeId, placesSummary, handlePlacePress]);
+
+  // ── Render ──
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -241,216 +358,111 @@ export default function MapScreen() {
         <LinkLoadBanner
           status={linkLoadStatus}
           successMessage={successMessage}
-          onSuccessDismiss={() => {
-            setLinkLoadStatus('idle');
-            setSuccessMessage(null);
-          }}
+          onSuccessDismiss={handleSuccessDismiss}
         />
+
         <View style={styles.mapContainer}>
           <View style={[styles.inlineFilters, { top: insets.top + 78 }]}>
             <PlaceFilters
               places={placesSummary}
               selectedCategory={singleFilterSelection?.category ?? null}
               selectedType={singleFilterSelection?.type ?? null}
-              onCategoryChange={(category) => {
-                if (!category) {
-                  setSelectedFilters([]);
-                  return;
-                }
-                setSelectedFilters([
-                  { category: category as 'Restauration' | 'Activité' | 'Non classé', type: null },
-                ]);
-              }}
-              onTypeChange={(type) => {
-                const category = singleFilterSelection?.category;
-                if (!category) return;
-                setSelectedFilters([{ category, type }]);
-              }}
+              onCategoryChange={handleCategoryChange}
+              onTypeChange={handleTypeChange}
               colorScheme={colorScheme}
               transparentBackground
             />
           </View>
-          {loadingLocation && (
+
+          {(loadingLocation || !region) && (
             <View style={styles.mapLoading}>
               <ActivityIndicator size="large" color={darkColor} />
             </View>
           )}
+
           {!loadingLocation && region && (
-            <MapView
-              style={StyleSheet.absoluteFillObject}
-              styleURL={mapStyle}
-              projection="globe"
-              onRegionDidChange={handleRegionDidChange}
-            >
-              <StyleImport
-                id="basemap"
-                existing
-                config={mapConfig}
-              />
-              <Camera
-                ref={cameraRef}
-                defaultSettings={{
-                  centerCoordinate: region.centerCoordinate,
-                  zoomLevel: region.zoomLevel,
-                }}
-                animationDuration={1000}
-                animationMode="flyTo"
-                followUserLocation={followUser}
-                followUserMode={UserTrackingMode.Follow}
-              />
-              {location && (
-                <LocationPuck
-                  visible
-                  puckBearing="heading"
-                  puckBearingEnabled
-                />
-              )}
-              <ShapeSource
-                ref={shapeSourceRef}
-                id="places"
-                shape={geoJson}
-                {...CLUSTER_SOURCE_PROPS}
-                onPress={handleShapePress as (e: unknown) => void}
+            <>
+              <MapView
+                style={StyleSheet.absoluteFillObject}
+                styleURL={mapStyle}
+                projection="globe"
+                onMapIdle={handleMapIdle}
               >
-                <CircleLayer
-                  id="places-clusters"
-                  filter={['has', 'point_count']}
-                  style={CLUSTER_LAYER_STYLE}
+                <StyleImport id="basemap" existing config={mapConfig} />
+                <Camera
+                  ref={cameraRef}
+                  defaultSettings={{
+                    centerCoordinate: region.centerCoordinate,
+                    zoomLevel: region.zoomLevel,
+                  }}
+                  animationDuration={1000}
+                  animationMode="flyTo"
+                  followUserLocation={followUser}
+                  followUserMode={UserTrackingMode.Follow}
                 />
-                <SymbolLayer
-                  id="places-cluster-count"
-                  filter={['has', 'point_count']}
-                  style={CLUSTER_COUNT_LAYER_STYLE as Record<string, unknown>}
+                {location && <LocationPuck visible puckBearing="heading" puckBearingEnabled />}
+                <ShapeSource
+                  ref={shapeSourceRef}
+                  id="places"
+                  shape={geoJson}
+                  {...CLUSTER_SOURCE_PROPS}
+                  onPress={handleShapePress as (e: unknown) => void}
+                >
+                  <CircleLayer
+                    id="places-clusters"
+                    filter={['has', 'point_count']}
+                    style={CLUSTER_LAYER_STYLE}
+                  />
+                  <SymbolLayer
+                    id="places-cluster-count"
+                    filter={['has', 'point_count']}
+                    style={CLUSTER_COUNT_LAYER_STYLE as Record<string, unknown>}
+                  />
+                </ShapeSource>
+                <MapMarkers
+                  places={filteredPlaces}
+                  theme={theme}
+                  onPlacePress={handlePlacePress}
                 />
-              </ShapeSource>
-              <MapMarkers
-                places={filteredPlaces}
+              </MapView>
+
+              <PlaceCardOverlay
+                place={cardPlace}
+                placeDetails={
+                  selectedPlace && cardPlace && selectedPlace.id === cardPlace.id
+                    ? selectedPlace
+                    : null
+                }
+                cardAppearProgress={cardAppearProgress}
+                cardExpansionProgress={cardExpansionProgress}
+                cardPanResponder={cardPanResponder}
+                toggleCardExpansion={toggleCardExpansion}
+                expandedFullHeight={expandedFullHeight}
+                navbarClearance={navbarClearance}
+                isDark={isDark}
                 theme={theme}
-                onPlacePress={handlePlacePress}
+                onRatingChange={handleRatingChange}
+                onTestedChange={handleTestedChange}
               />
-            </MapView>
-          )}
-          {!loadingLocation && !region && (
-            <View style={styles.mapLoading}>
-              <ActivityIndicator size="large" color={darkColor} />
-            </View>
-          )}
-          {!loadingLocation && region && (
-            <View
-              style={[styles.centerUserButton, { bottom: insets.bottom + 72 }]}
-              pointerEvents="box-none"
-            >
-              {useLiquidButtons ? (
-                <GlassView
-                  glassEffectStyle="regular"
-                  isInteractive
-                  style={styles.glassButtonGroup}
-                >
-                  <Pressable
-                    onPress={() => {}}
-                    accessibilityRole="button"
-                    accessibilityLabel="Filtre (bientot disponible)"
-                    style={styles.groupButton}
-                  >
-                    <Ionicons
-                      name="options-outline"
-                      size={18}
-                      color={theme.text}
-                    />
-                  </Pressable>
-                  <View style={[styles.groupDivider, { backgroundColor: theme.border }]} />
-                  <Pressable
-                    onPress={handleCenterUser}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      followUser
-                        ? 'Ne plus suivre ma position'
-                        : 'Centrer et suivre ma position'
-                    }
-                    style={styles.groupButton}
-                  >
-                    <Ionicons
-                      name={followUser ? 'navigate' : 'navigate-outline'}
-                      size={18}
-                      color={followUser ? '#0a7ea4' : theme.text}
-                    />
-                  </Pressable>
-                </GlassView>
-              ) : (
-                <View
-                  style={[
-                    styles.fallbackButtonGroup,
-                    {
-                      backgroundColor: '#3a3b3d',
-                      borderColor: '#3a3b3d',
-                    },
-                  ]}
-                >
-                  <Pressable
-                    onPress={() => {}}
-                    accessibilityRole="button"
-                    accessibilityLabel="Filtre (bientot disponible)"
-                    style={styles.groupButton}
-                  >
-                    <Ionicons
-                      name="options-outline"
-                      size={18}
-                      color="#fff"
-                    />
-                  </Pressable>
-                  <View style={[styles.groupDivider, { backgroundColor: 'rgba(255,255,255,0.25)' }]} />
-                  <Pressable
-                    onPress={handleCenterUser}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      followUser
-                        ? 'Ne plus suivre ma position'
-                        : 'Centrer et suivre ma position'
-                    }
-                    style={styles.groupButton}
-                  >
-                    <Ionicons
-                      name={followUser ? 'navigate' : 'navigate-outline'}
-                      size={18}
-                      color={followUser ? '#0a7ea4' : '#fff'}
-                    />
-                  </Pressable>
-                </View>
-              )}
-            </View>
+
+              <MapActionButtons
+                followUser={followUser}
+                onCenterUser={handleCenterUser}
+                theme={theme}
+                bottom={navbarClearance}
+              />
+            </>
           )}
         </View>
 
         <LinkBottomSheet
           visible={isLinkModalVisible}
-          onClose={() => {
-            setIsLinkModalVisible(false);
-            setLinkInput('');
-            if (!isAddingPlace) setProcessingUrl(null);
-          }}
+          onClose={handleLinkModalClose}
           linkInput={linkInput}
           onLinkInputChange={setLinkInput}
           onTaskCreated={handleTaskCreated}
-          onStartProcessing={() => {
-            setAddingPlace(true);
-            setLinkLoadStatus('loading');
-            if (linkInput.trim()) setProcessingUrl(linkInput.trim());
-          }}
-          onError={(error) => {
-            const isNetworkError =
-              error?.message?.includes('Network request failed') ||
-              error?.message?.includes('Aborted') ||
-              error?.name === 'AbortError';
-            if (!isNetworkError) {
-              setAddingPlace(false);
-              setLinkLoadStatus('idle');
-              setProcessingUrl(null);
-              showError(
-                error.message ||
-                  "Une erreur est survenue lors de l'analyse du lien."
-              );
-            }
-          }}
+          onStartProcessing={handleStartProcessing}
+          onError={handleLinkError}
         />
 
         <Toast
@@ -474,35 +486,4 @@ const styles = StyleSheet.create({
     zIndex: 15,
   },
   mapLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  centerUserButton: { position: 'absolute', right: 16, zIndex: 10, overflow: 'visible' },
-  glassButtonGroup: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    width: 44,
-    borderRadius: 22,
-    padding: 2,
-    margin: -2,
-    overflow: 'visible',
-  },
-  fallbackButtonGroup: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    width: 40,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-  },
-  groupButton: {
-    width: 36,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 17,
-  },
-  groupDivider: {
-    width: 20,
-    height: StyleSheet.hairlineWidth,
-    opacity: 0.5,
-  },
 });
-

@@ -1,1 +1,3 @@
-export { default } from '@/features/places/screens/MapScreen';
+import MapScreen from '@/features/places/screens/MapScreen';
+
+export default MapScreen;

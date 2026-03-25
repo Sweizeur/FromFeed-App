@@ -92,8 +92,8 @@ export default function PlacesScreen() {
   }, [placesSummary, searchText, selectedCategory, selectedType]);
 
   const handlePlacePress = useCallback(
-    (_place: { id: string }) => {
-      router.push('/(tabs)/map');
+    (place: { id: string }) => {
+      router.push({ pathname: '/(tabs)/map', params: { placeId: place.id } });
     },
     [router]
   );

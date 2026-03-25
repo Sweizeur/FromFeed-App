@@ -73,6 +73,16 @@ export async function updatePlaceRating(
   });
 }
 
+export async function updatePlaceTested(
+  placeId: string,
+  isTested: boolean
+): Promise<{ success: boolean; isTested: boolean } | null> {
+  return apiRequest(`/api/places/${encodeURIComponent(placeId)}/tested`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isTested }),
+  });
+}
+
 export async function deletePlace(placeId: string): Promise<{ message: string } | null> {
   return apiRequest(`/api/places/${encodeURIComponent(placeId)}`, { method: 'DELETE' });
 }

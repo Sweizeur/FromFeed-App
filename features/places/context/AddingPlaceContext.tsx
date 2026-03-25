@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 export type LinkLoadStatus = 'idle' | 'loading' | 'success';
 
@@ -22,19 +22,28 @@ export function AddingPlaceProvider({ children }: { children: React.ReactNode })
   const [placesVersion, setPlacesVersion] = useState(0);
   const bumpPlacesVersion = useCallback(() => setPlacesVersion((value) => value + 1), []);
 
+  const value = useMemo(
+    () => ({
+      isAddingPlace,
+      setAddingPlace,
+      linkLoadStatus,
+      setLinkLoadStatus,
+      successMessage,
+      setSuccessMessage,
+      placesVersion,
+      bumpPlacesVersion,
+    }),
+    [
+      isAddingPlace,
+      linkLoadStatus,
+      successMessage,
+      placesVersion,
+      bumpPlacesVersion,
+    ],
+  );
+
   return (
-    <AddingPlaceContext.Provider
-      value={{
-        isAddingPlace,
-        setAddingPlace,
-        linkLoadStatus,
-        setLinkLoadStatus,
-        successMessage,
-        setSuccessMessage,
-        placesVersion,
-        bumpPlacesVersion,
-      }}
-    >
+    <AddingPlaceContext.Provider value={value}>
       {children}
     </AddingPlaceContext.Provider>
   );

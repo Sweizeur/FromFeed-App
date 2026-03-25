@@ -16,6 +16,7 @@ import {
   SymbolLayer,
   LocationPuck,
   StyleImport,
+  type MapState,
 } from '@rnmapbox/maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -86,9 +87,9 @@ export default function CollectionDetailScreen() {
     }
   }, [followUser, startWatchingUser, stopWatchingUser, animateToUser]);
 
-  const handleRegionDidChange = useCallback(
-    (regionFeature: { properties?: { isUserInteraction?: boolean } }) => {
-      if (!regionFeature?.properties?.isUserInteraction) return;
+  const handleCameraChanged = useCallback(
+    (state: MapState) => {
+      if (!state.gestures?.isGestureActive) return;
       if (isProgrammaticChange()) return;
       if (followUser) {
         setFollowUser(false);
@@ -203,7 +204,7 @@ export default function CollectionDetailScreen() {
             style={StyleSheet.absoluteFillObject}
             styleURL={mapStyle}
             projection="globe"
-            onRegionDidChange={handleRegionDidChange}
+            onCameraChanged={handleCameraChanged}
           >
             <StyleImport id="basemap" existing config={mapConfig} />
             <Camera

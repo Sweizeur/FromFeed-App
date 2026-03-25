@@ -104,7 +104,9 @@ export interface Place {
   googlePhotoUrl?: string | null;
   googleOpenNow?: boolean | null;
   googleOpeningHours?: string | null;
+  googleEditorialSummary?: string | null;
   userRating?: number | null;
+  isTested?: boolean;
   category?: string | null;
   types?: string[];
   createdAt: string;
@@ -134,6 +136,9 @@ export interface PlaceSummary {
   googleUserRatingsTotal?: number | null;
   googlePhotoUrl?: string | null;
   googlePhone?: string | null;
+  googleWebsite?: string | null;
+  googleOpenNow?: boolean | null;
+  googleOpeningHours?: string | null;
   notes?: string | null;
   provider: string;
   canonicalUrl: string;
@@ -142,6 +147,7 @@ export interface PlaceSummary {
   types?: string[];
   markerEmoji?: string | null;
   userRating?: number | null;
+  isTested?: boolean;
   collectionIds?: string[];
 }
 
