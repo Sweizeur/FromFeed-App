@@ -93,7 +93,11 @@ export default function PlacesScreen() {
 
   const handlePlacePress = useCallback(
     (place: { id: string }) => {
-      router.push({ pathname: '/(tabs)/map', params: { placeId: place.id } });
+      // mapListNonce force MapScreen à traiter chaque tap (expo-router peut réutiliser les mêmes params)
+      router.push({
+        pathname: '/(tabs)/map',
+        params: { placeId: place.id, mapListNonce: String(Date.now()) },
+      });
     },
     [router]
   );

@@ -58,7 +58,10 @@ type ShapeFeature = {
 };
 
 export default function MapScreen() {
-  const { placeId } = useLocalSearchParams<{ placeId?: string }>();
+  const { placeId, mapListNonce } = useLocalSearchParams<{
+    placeId?: string;
+    mapListNonce?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -113,7 +116,7 @@ export default function MapScreen() {
   // ── Local state ──
   const shapeSourceRef = useRef<ShapeSource>(null);
   const lastIdleCameraRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
-  const lastAppliedPlaceIdRef = useRef<string | null>(null);
+  const lastHandledListFocusKeyRef = useRef<string | null>(null);
   const [followUser, setFollowUser] = useState(false);
   const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
   const [linkInput, setLinkInput] = useState('');
@@ -339,16 +342,29 @@ export default function MapScreen() {
     [setAddingPlace, setLinkErrorMessage, setLinkLoadStatus, setProcessingUrl],
   );
 
-  // ── Deep-link: navigate to place from route param ──
+  // ── Deep-link: ouverture depuis la liste (placeId + mapListNonce uniques par tap) ──
   useEffect(() => {
     if (!placeId || Array.isArray(placeId)) return;
-    if (lastAppliedPlaceIdRef.current === placeId) return;
+    if (!mapListNonce || Array.isArray(mapListNonce)) return;
+
     const placeFromList = placesSummary.find((p) => p.id === placeId);
     if (!placeFromList) return;
-    lastAppliedPlaceIdRef.current = placeId;
-    void handlePlacePress(placeFromList);
-    router.replace('/(tabs)/map');
-  }, [placeId, placesSummary, handlePlacePress]);
+
+    const focusKey = `${placeId}:${mapListNonce}`;
+    if (lastHandledListFocusKeyRef.current === focusKey) return;
+    lastHandledListFocusKeyRef.current = focusKey;
+
+    let cancelled = false;
+    (async () => {
+      await handlePlacePress(placeFromList);
+      if (!cancelled) router.replace('/(tabs)/map');
+    })();
+
+    return () => {
+      cancelled = true;
+      lastHandledListFocusKeyRef.current = null;
+    };
+  }, [placeId, mapListNonce, placesSummary, handlePlacePress]);
 
   // ── Render ──
   return (
