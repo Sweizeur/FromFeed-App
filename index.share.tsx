@@ -75,6 +75,43 @@ async function sendLink(url: string): Promise<{ taskId?: string }> {
   return res.json();
 }
 
+/** Notes Apple : texte long ou plusieurs lignes → import IA + Google (backend). */
+function shouldImportAsNote(text: string, extractedUrl: string | null): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  const lines = t.split(/\n/).map((l) => l.trim()).filter(Boolean);
+  if (t.length > 200) return true;
+  if (lines.length >= 3) return true;
+  if (lines.length >= 2 && t.length > 40 && !extractedUrl) return true;
+  return false;
+}
+
+async function sendNoteImport(noteText: string): Promise<{ taskId?: string }> {
+  const token = await getToken();
+  if (!token) {
+    const err = new Error('UNAUTHORIZED');
+    (err as Error & { code?: string }).code = 'UNAUTHORIZED';
+    throw err;
+  }
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+
+  const res = await fetch(`${BACKEND_URL}/api/tasks`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ noteText }),
+  });
+  if (res.status === 401) {
+    const err = new Error('UNAUTHORIZED');
+    (err as Error & { code?: string }).code = 'UNAUTHORIZED';
+    throw err;
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 /** Props reçues par la share extension (expo-share-extension peut les mettre dans initialProps) */
 type ShareExtensionProps = {
   url?: string;
@@ -110,27 +147,69 @@ function extractUrl(props: ShareExtensionProps): string | null {
 }
 
 type Phase = 'loading' | 'success' | 'error' | 'unsupported';
+type ShareMode = 'link' | 'note';
 
 function ShareExtensionRoot(props: ShareExtensionProps) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [message, setMessage] = useState('');
+  const [mode, setMode] = useState<ShareMode>('link');
 
   useEffect(() => {
     let cancelled = false;
+    const rawText = (getTextFromProps(props) ?? '').trim();
     const url = extractUrl(props);
+    const asNote = shouldImportAsNote(rawText, url);
+    setMode(asNote ? 'note' : 'link');
 
     (async () => {
+      if (asNote) {
+        try {
+          const data = await sendNoteImport(rawText);
+          if (cancelled) return;
+          if (data?.taskId) {
+            try {
+              await SecureStore.setItemAsync(PENDING_TASK_KEY, data.taskId, {
+                accessGroup: KEYCHAIN_GROUP,
+              });
+            } catch {
+              // ignore
+            }
+            setPhase('success');
+            setMessage(
+              "Ta note est bien partie.\nLes lieux trouvés seront ajoutés quand tu ouvriras l'app (cela peut prendre une minute).",
+            );
+          } else {
+            setPhase('error');
+            setMessage("Connecte-toi dans l'app FromFeed puis réessaie.");
+          }
+        } catch (e) {
+          if (cancelled) return;
+          const code = (e as { code?: string })?.code;
+          if (code === 'UNAUTHORIZED') {
+            setPhase('error');
+            setMessage('Connecte-toi dans FromFeed pour importer une note.');
+            return;
+          }
+          setPhase('error');
+          setMessage("Impossible d'envoyer la note. Vérifie ta connexion et réessaie.");
+        }
+        return;
+      }
+
+      setMode('link');
 
       if (!url) {
         setPhase('error');
-        setMessage("Le lien partagé n'a pas pu être lu.");
+        setMessage(
+          "Partage une note (liste de lieux) ou un lien TikTok / Instagram depuis l'app Notes ou Safari."
+        );
         return;
       }
 
       if (!isSupportedLink(url)) {
         setPhase('unsupported');
         setMessage(
-          "FromFeed n'accepte que les liens TikTok et Instagram pour le moment."
+          "FromFeed n'accepte que les liens TikTok et Instagram pour ce type de partage. Tu peux aussi partager une note avec une liste de lieux."
         );
         return;
       }
@@ -174,6 +253,10 @@ function ShareExtensionRoot(props: ShareExtensionProps) {
     : phase === 'unsupported' ? light.icon
     : ERROR_RED;
 
+  const loadingTitle =
+    mode === 'note' ? 'Import de la note…' : 'Analyse en cours…';
+  const successTitle = mode === 'note' ? 'Note reçue !' : 'Lien reçu !';
+
   return (
     <View style={[styles.backdrop, { backgroundColor: darkColorWithAlpha(0.5) }]}>
       <View style={[styles.card, { backgroundColor: light.surface }]}>
@@ -195,11 +278,11 @@ function ShareExtensionRoot(props: ShareExtensionProps) {
 
         <Text style={[styles.title, { color: light.text }]} allowFontScaling={false}>
           {isLoading
-            ? 'Analyse en cours…'
+            ? loadingTitle
             : isSuccess
-              ? 'Lien reçu !'
+              ? successTitle
               : phase === 'unsupported'
-                ? 'Lien non supporté'
+                ? 'Partage non supporté'
                 : 'Une erreur est survenue'}
         </Text>
 

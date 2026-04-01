@@ -67,6 +67,32 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
         setAddingPlace(true);
         return;
       }
+
+      if (result?.kind === 'noteImport') {
+        const added = typeof result.added === 'number' ? result.added : 0;
+        const skippedNo =
+          (typeof result.skippedNoMatch === 'number' ? result.skippedNoMatch : 0) +
+          (typeof result.skippedRejected === 'number' ? result.skippedRejected : 0);
+        setLinkErrorMessage(null);
+        setLinkLoadStatus('success');
+        if (added === 0) {
+          setSuccessMessage(
+            skippedNo > 0
+              ? `Aucun lieu ajouté (${skippedNo} ignorés ou introuvables sur Google).`
+              : 'Aucun lieu détecté dans la note.',
+          );
+        } else {
+          setSuccessMessage(
+            `${added} lieu${added > 1 ? 'x' : ''} ajouté${added > 1 ? 's' : ''}${skippedNo > 0 ? ` (${skippedNo} ignorés)` : ''} !`,
+          );
+        }
+        await onPlaceSaved();
+        bumpPlacesVersion();
+        setProcessingUrl(null);
+        processingUrlRef.current = null;
+        return;
+      }
+
       if (!result?.placeId) {
         setLinkErrorMessage(
           "Le lieu n'a pas pu être ajouté. Les informations extraites ne correspondent pas aux données Google Places.",
