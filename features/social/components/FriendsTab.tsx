@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet, Text, FlatList, TouchableOpacity, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import GlassButton from '@/components/ui/GlassButton';
 import { Colors, darkColor } from '@/constants/theme';
 import type { Friend } from '@/features/social/types';
 import { MOCK_FRIENDS } from '@/features/social/mocks/friends';
@@ -55,10 +56,16 @@ export default function FriendsTab({ theme }: FriendsTabProps) {
         <Text style={[styles.headerText, { color: theme.text }]}>
           {MOCK_FRIENDS.length} ami{MOCK_FRIENDS.length > 1 ? 's' : ''}
         </Text>
-        <TouchableOpacity style={[styles.addButton, { backgroundColor: theme.surface, borderColor: theme.border }]} activeOpacity={0.7}>
-          <Ionicons name="person-add" size={16} color={theme.text} />
-          <Text style={[styles.addButtonText, { color: theme.text }]}>Ajouter</Text>
-        </TouchableOpacity>
+        <GlassButton
+          icon="person-add-outline"
+          label="Ajouter"
+          onPress={() => {}}
+          textColor={theme.text}
+          backgroundColor={isDark ? '#3a3b3d' : theme.surface}
+          borderColor={theme.border}
+          iconSize={20}
+          accessibilityLabel="Ajouter un ami"
+        />
       </View>
 
       <FlatList
@@ -88,19 +95,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     letterSpacing: -0.3,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  addButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   listContent: {
     paddingHorizontal: 16,

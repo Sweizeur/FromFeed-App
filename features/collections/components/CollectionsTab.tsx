@@ -3,6 +3,7 @@ import { View, StyleSheet, Text, FlatList, TouchableOpacity, useColorScheme, Act
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { MenuView } from '@react-native-menu/menu';
+import GlassButton from '@/components/ui/GlassButton';
 import { Colors, darkColor } from '@/constants/theme';
 import { useCollectionsStore, type CollectionItem } from '@/features/collections/store/useCollectionsStore';
 
@@ -170,14 +171,16 @@ export default function CollectionsTab({ theme }: CollectionsTabProps) {
         <Text style={[styles.headerText, { color: theme.text }]}>
           {collections.length} collection{collections.length !== 1 ? 's' : ''}
         </Text>
-        <TouchableOpacity
-          style={[styles.addButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-          activeOpacity={0.7}
+        <GlassButton
+          icon="add"
+          label="Créer"
           onPress={handleCreatePress}
-        >
-          <Ionicons name="add" size={18} color={theme.text} />
-          <Text style={[styles.addButtonText, { color: theme.text }]}>Créer</Text>
-        </TouchableOpacity>
+          textColor={theme.text}
+          backgroundColor={isDark ? '#3a3b3d' : theme.surface}
+          borderColor={theme.border}
+          iconSize={20}
+          accessibilityLabel="Créer une collection"
+        />
       </View>
 
       {collections.length === 0 ? (
@@ -235,19 +238,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     letterSpacing: -0.3,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  addButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   listContent: {
     paddingHorizontal: 16,
