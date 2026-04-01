@@ -93,8 +93,11 @@ export function useCardAnimation() {
           return false;
         },
         onPanResponderGrant: () => {
-          cardExpansionProgress.stopAnimation();
-          gestureStartProgress.current = cardExpansionValue.current;
+          // Valeur lue depuis le nœud Animated (le ref peut diverger après charge JS / la carte)
+          cardExpansionProgress.stopAnimation((v) => {
+            gestureStartProgress.current = v;
+            cardExpansionValue.current = v;
+          });
         },
         onPanResponderMove: (_, g) => {
           const delta = -g.dy / heightRange;
@@ -103,20 +106,27 @@ export function useCardAnimation() {
           cardExpansionValue.current = next;
         },
         onPanResponderRelease: (_, g) => {
-          const v = cardExpansionValue.current;
-          const vy = g.vy;
-          // Vélocité d’abord (sheet classique), sinon snap au point milieu
-          if (vy < -0.4) {
-            expandCard();
-          } else if (vy > 0.4) {
-            collapseCard();
-          } else if (v > 0.5) {
-            expandCard();
-          } else {
-            collapseCard();
-          }
+          const vy = Number.isFinite(g.vy) ? g.vy : 0;
+          cardExpansionProgress.stopAnimation((v) => {
+            cardExpansionValue.current = v;
+            if (vy < -0.4) {
+              expandCard();
+            } else if (vy > 0.4) {
+              collapseCard();
+            } else if (v > 0.5) {
+              expandCard();
+            } else {
+              collapseCard();
+            }
+          });
         },
-        onPanResponderTerminate: () => collapseCard(),
+        onPanResponderTerminate: () => {
+          cardExpansionProgress.stopAnimation((v) => {
+            cardExpansionValue.current = v;
+            if (v > 0.5) expandCard();
+            else collapseCard();
+          });
+        },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [expandCard, collapseCard, cardExpansionProgress, heightRange],
