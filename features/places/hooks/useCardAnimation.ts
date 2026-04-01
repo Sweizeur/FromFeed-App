@@ -100,9 +100,17 @@ export function useCardAnimation() {
           const delta = -g.dy / heightRange;
           const next = Math.max(0, Math.min(1, gestureStartProgress.current + delta));
           cardExpansionProgress.setValue(next);
+          cardExpansionValue.current = next;
         },
         onPanResponderRelease: (_, g) => {
-          if (-g.vy > 0.4 || cardExpansionValue.current > 0.4) {
+          const v = cardExpansionValue.current;
+          const vy = g.vy;
+          // Vélocité d’abord (sheet classique), sinon snap au point milieu
+          if (vy < -0.4) {
+            expandCard();
+          } else if (vy > 0.4) {
+            collapseCard();
+          } else if (v > 0.5) {
             expandCard();
           } else {
             collapseCard();
