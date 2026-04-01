@@ -444,6 +444,7 @@ export default function MapScreen() {
                   places={filteredPlaces}
                   theme={theme}
                   onPlacePress={handlePlacePress}
+                  selectedPlaceId={selectedCardPlace?.id ?? null}
                 />
               </MapView>
 
