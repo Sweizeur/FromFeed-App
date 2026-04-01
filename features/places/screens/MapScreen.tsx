@@ -344,14 +344,18 @@ export default function MapScreen() {
 
   // ── Deep-link: ouverture depuis la liste (placeId + mapListNonce uniques par tap) ──
   useEffect(() => {
-    if (!placeId || Array.isArray(placeId)) return;
+    if (!placeId || Array.isArray(placeId)) {
+      lastHandledListFocusKeyRef.current = null;
+      return;
+    }
     if (!mapListNonce || Array.isArray(mapListNonce)) return;
+
+    const focusKey = `${placeId}:${mapListNonce}`;
+    if (lastHandledListFocusKeyRef.current === focusKey) return;
 
     const placeFromList = placesSummary.find((p) => p.id === placeId);
     if (!placeFromList) return;
 
-    const focusKey = `${placeId}:${mapListNonce}`;
-    if (lastHandledListFocusKeyRef.current === focusKey) return;
     lastHandledListFocusKeyRef.current = focusKey;
 
     let cancelled = false;
@@ -362,7 +366,6 @@ export default function MapScreen() {
 
     return () => {
       cancelled = true;
-      lastHandledListFocusKeyRef.current = null;
     };
   }, [placeId, mapListNonce, placesSummary, handlePlacePress]);
 
