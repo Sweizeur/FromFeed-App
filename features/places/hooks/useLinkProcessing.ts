@@ -5,7 +5,6 @@ import * as SecureStore from 'expo-secure-store';
 import { createLinkPreviewTask, getTaskStatus } from '@/lib/api';
 import { subscribeTaskViaWs } from '@/lib/api/tasks-ws';
 import { useAddingPlace } from '@/features/places/context/AddingPlaceContext';
-import { useToast } from '@/hooks/useToast';
 import { useShareHandler } from '@/hooks/useShareHandler';
 
 const PENDING_LINK_TASK_ID = '@fromfeed:pendingLinkTaskId';
@@ -19,13 +18,12 @@ interface UseLinkProcessingOptions {
 }
 
 export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
-  const { showError } = useToast();
   const {
     isAddingPlace,
     setAddingPlace,
-    linkLoadStatus,
     setLinkLoadStatus,
     setSuccessMessage,
+    setLinkErrorMessage,
     bumpPlacesVersion,
   } = useAddingPlace();
 
@@ -54,6 +52,15 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
     }
   }, [setAddingPlace]);
 
+  const showLinkFailure = useCallback(
+    (message: string) => {
+      clearPendingTask();
+      setLinkErrorMessage(message);
+      setLinkLoadStatus('error');
+    },
+    [clearPendingTask, setLinkErrorMessage, setLinkLoadStatus],
+  );
+
   const handleSaveLink = useCallback(
     async (result: Record<string, unknown>) => {
       if (result && 'processing' in result && result.processing === true) {
@@ -61,11 +68,15 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
         return;
       }
       if (!result?.placeId) {
-        showError("Le lieu n'a pas pu être ajouté. Les informations extraites ne correspondent pas aux données Google Places.");
+        setLinkErrorMessage(
+          "Le lieu n'a pas pu être ajouté. Les informations extraites ne correspondent pas aux données Google Places.",
+        );
+        setLinkLoadStatus('error');
         setAddingPlace(false);
-        setLinkLoadStatus('idle');
         return;
       }
+      setLinkErrorMessage(null);
+      setLinkLoadStatus('success');
       const llm = result.llm as Record<string, string> | undefined;
       const google = result.google as Record<string, string> | undefined;
       const place = result.place as Record<string, string> | undefined;
@@ -78,7 +89,14 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
       setProcessingUrl(null);
       processingUrlRef.current = null;
     },
-    [showError, onPlaceSaved, setAddingPlace, setLinkLoadStatus, setSuccessMessage, bumpPlacesVersion]
+    [
+      onPlaceSaved,
+      setAddingPlace,
+      setLinkLoadStatus,
+      setLinkErrorMessage,
+      setSuccessMessage,
+      bumpPlacesVersion,
+    ]
   );
 
   const checkTaskStatus = useCallback(
@@ -86,20 +104,17 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
       const statusRes = await getTaskStatus(taskId);
       if (!statusRes) return false;
       if (statusRes.status === 'done' && statusRes.result) {
-        setLinkLoadStatus('success');
         await handleSaveLink(statusRes.result as unknown as Record<string, unknown>);
         clearPendingTask();
         return true;
       }
       if (statusRes.status === 'failed' || statusRes.status === 'expired') {
-        showError(statusRes.error || "L'analyse du lien a échoué.");
-        setLinkLoadStatus('idle');
-        clearPendingTask();
+        showLinkFailure(statusRes.error || "L'analyse du lien a échoué.");
         return true;
       }
       return false;
     },
-    [handleSaveLink, clearPendingTask, showError, setLinkLoadStatus]
+    [handleSaveLink, clearPendingTask, showLinkFailure]
   );
 
   const scheduleNextPoll = useCallback(
@@ -107,9 +122,7 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
       if (pollTimeoutRef.current) return;
       const elapsed = Date.now() - pollStartRef.current;
       if (elapsed >= POLL_MAX_MS) {
-        showError("L'analyse prend trop de temps. Réessayez plus tard.");
-        setLinkLoadStatus('idle');
-        clearPendingTask();
+        showLinkFailure("L'analyse prend trop de temps. Réessayez plus tard.");
         return;
       }
       const delay = attempt < POLL_INTERVALS.length ? POLL_INTERVALS[attempt] : 10000;
@@ -119,7 +132,7 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
         if (!done) scheduleNextPoll(taskId, attempt + 1);
       }, delay);
     },
-    [checkTaskStatus, clearPendingTask, showError, setLinkLoadStatus]
+    [checkTaskStatus, showLinkFailure]
   );
 
   const startListeningForTask = useCallback(
@@ -133,13 +146,10 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
         async (update) => {
           cancelWsRef.current = null;
           if (update.status === 'done' && update.result) {
-            setLinkLoadStatus('success');
             await handleSaveLink(update.result);
             clearPendingTask();
           } else {
-            showError(update.error || "L'analyse du lien a échoué.");
-            setLinkLoadStatus('idle');
-            clearPendingTask();
+            showLinkFailure(update.error || "L'analyse du lien a échoué.");
           }
         },
         // WS indisponible → fallback polling
@@ -150,7 +160,7 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
         },
       );
     },
-    [handleSaveLink, clearPendingTask, showError, setLinkLoadStatus, scheduleNextPoll],
+    [handleSaveLink, clearPendingTask, showLinkFailure, setLinkLoadStatus, scheduleNextPoll],
   );
 
   const handleTaskCreated = useCallback(
@@ -223,7 +233,9 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
           AsyncStorage.setItem(PENDING_LINK_TASK_ID, response.taskId);
           startListeningForTask(response.taskId);
         } else {
-          showError("Impossible de lancer l'analyse du lien partagé.");
+          setLinkErrorMessage("Impossible de lancer l'analyse du lien partagé.");
+          setLinkLoadStatus('error');
+          setAddingPlace(false);
           processingUrlRef.current = null;
         }
       } catch (error: unknown) {
@@ -232,15 +244,18 @@ export function useLinkProcessing({ onPlaceSaved }: UseLinkProcessingOptions) {
           err.message?.includes('Network request failed') ||
           err.message?.includes('Aborted') ||
           err.name === 'AbortError';
+        processingUrlRef.current = null;
+        setAddingPlace(false);
         if (!isNetworkError) {
           __DEV__ && console.error('[LinkProcessing] Erreur:', error);
-          showError(err.message || "Une erreur est survenue lors de l'analyse du lien.");
+          setLinkErrorMessage(err.message || "Une erreur est survenue lors de l'analyse du lien.");
+          setLinkLoadStatus('error');
+        } else {
+          setLinkLoadStatus('idle');
         }
-        processingUrlRef.current = null;
-        setLinkLoadStatus('idle');
       }
     },
-    [showError, startListeningForTask, setAddingPlace, setLinkLoadStatus]
+    [startListeningForTask, setAddingPlace, setLinkLoadStatus, setLinkErrorMessage]
   );
 
   useShareHandler(handleSharedUrl);

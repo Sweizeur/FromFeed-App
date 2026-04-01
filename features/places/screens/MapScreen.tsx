@@ -87,6 +87,8 @@ export default function MapScreen() {
     setLinkLoadStatus,
     successMessage,
     setSuccessMessage,
+    linkErrorMessage,
+    setLinkErrorMessage,
   } = useAddingPlace();
 
   const onPlaceSaved = useCallback(async () => {
@@ -302,10 +304,11 @@ export default function MapScreen() {
   );
 
   // ── Link modal callbacks ──
-  const handleSuccessDismiss = useCallback(() => {
+  const handleLinkBannerDismiss = useCallback(() => {
     setLinkLoadStatus('idle');
     setSuccessMessage(null);
-  }, [setLinkLoadStatus, setSuccessMessage]);
+    setLinkErrorMessage(null);
+  }, [setLinkLoadStatus, setSuccessMessage, setLinkErrorMessage]);
 
   const handleLinkModalClose = useCallback(() => {
     setIsLinkModalVisible(false);
@@ -316,8 +319,9 @@ export default function MapScreen() {
   const handleStartProcessing = useCallback(() => {
     setAddingPlace(true);
     setLinkLoadStatus('loading');
+    setLinkErrorMessage(null);
     if (linkInput.trim()) setProcessingUrl(linkInput.trim());
-  }, [setAddingPlace, setLinkLoadStatus, linkInput, setProcessingUrl]);
+  }, [setAddingPlace, setLinkLoadStatus, setLinkErrorMessage, linkInput, setProcessingUrl]);
 
   const handleLinkError = useCallback(
     (error: { message?: string; name?: string }) => {
@@ -327,12 +331,12 @@ export default function MapScreen() {
         error?.name === 'AbortError';
       if (!isNetworkError) {
         setAddingPlace(false);
-        setLinkLoadStatus('idle');
+        setLinkErrorMessage(error.message || "Une erreur est survenue lors de l'analyse du lien.");
+        setLinkLoadStatus('error');
         setProcessingUrl(null);
-        showError(error.message || "Une erreur est survenue lors de l'analyse du lien.");
       }
     },
-    [setAddingPlace, setLinkLoadStatus, setProcessingUrl, showError],
+    [setAddingPlace, setLinkErrorMessage, setLinkLoadStatus, setProcessingUrl],
   );
 
   // ── Deep-link: navigate to place from route param ──
@@ -358,7 +362,8 @@ export default function MapScreen() {
         <LinkLoadBanner
           status={linkLoadStatus}
           successMessage={successMessage}
-          onSuccessDismiss={handleSuccessDismiss}
+          errorMessage={linkErrorMessage}
+          onDismiss={handleLinkBannerDismiss}
         />
 
         <View style={styles.mapContainer}>

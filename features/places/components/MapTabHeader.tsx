@@ -2,13 +2,10 @@ import React from 'react';
 import { Platform, View, StyleSheet, Text, Pressable, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { BlurView } from 'expo-blur';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { GlassView } from 'expo-glass-effect';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/auth/useAuthStore';
 import { Colors } from '@/constants/theme';
-
-const useGlass = Platform.OS === 'ios' && isLiquidGlassAvailable();
 
 interface MapTabHeaderProps {
   placesCount: number;
@@ -42,9 +39,6 @@ export default function MapTabHeader({
     user?.email?.charAt(0)?.toUpperCase() ||
     '?';
 
-  const pillBg = isDark ? 'rgba(58,59,61,0.6)' : 'rgba(250,248,242,0.92)';
-  const pillBorder = isDark ? 'rgba(255,255,255,0.10)' : theme.border;
-
   return (
     <View
       style={[
@@ -57,30 +51,22 @@ export default function MapTabHeader({
       pointerEvents="box-none"
     >
       <View style={styles.headerShell} pointerEvents="box-none">
-        <BlurView
-          intensity={isDark ? 70 : 60}
-          tint={isDark ? 'dark' : 'light'}
+        <GlassView
+          glassEffectStyle="regular"
+          tintColor={isDark ? 'rgba(23, 23, 24, 0.95)' : 'rgba(245, 243, 236, 0.95)'}
+          isInteractive
           style={[
-            styles.blur,
-            {
-              backgroundColor: isDark
-                ? 'rgba(28,28,30,0.85)'
-                : 'rgba(250,248,242,0.88)',
-              borderColor: pillBorder,
-            },
+            styles.glassHeader,
           ]}
         >
           <View style={styles.row}>
-            {/* Profile section */}
             <Pressable
               style={styles.profile}
               onPress={onProfilePress}
               accessibilityRole="button"
               accessibilityLabel="Profil"
             >
-              <View
-                style={[styles.avatarWrap, { backgroundColor: pillBg }]}
-              >
+              <View style={[styles.avatarWrap]}>
                 {user?.image ? (
                   <Image source={{ uri: user.image }} style={styles.avatar} />
                 ) : (
@@ -105,68 +91,33 @@ export default function MapTabHeader({
               </View>
             </Pressable>
           </View>
-        </BlurView>
+        </GlassView>
 
         <View style={styles.actionsOverlay} pointerEvents="box-none">
-          {/* Actions */}
-          {useGlass ? (
-            <GlassView
-              glassEffectStyle="regular"
-              isInteractive
-              style={styles.glassActionsBar}
+          <GlassView
+            glassEffectStyle="regular"
+            tintColor={isDark ? 'rgba(20,20,20,0.55)' : 'rgba(245, 243, 236, 0.95)'}
+            isInteractive
+            style={styles.glassActionsBar}
+          >
+            <Pressable
+              onPress={onHelpPress ?? (() => {})}
+              accessibilityRole="button"
+              accessibilityLabel="Aide"
+              style={styles.glassActionPressable}
             >
-              <Pressable
-                onPress={onHelpPress ?? (() => {})}
-                accessibilityRole="button"
-                accessibilityLabel="Aide"
-                style={styles.glassActionPressable}
-              >
-                <Ionicons name="help-circle-outline" size={20} color={theme.text} />
-              </Pressable>
-              <View style={[styles.glassActionDivider, { backgroundColor: theme.border }]} />
-              <Pressable
-                onPress={onAddPress ?? (() => {})}
-                accessibilityRole="button"
-                accessibilityLabel="Ajouter un lieu"
-                style={styles.glassActionPressable}
-              >
-                <Ionicons name="add" size={20} color={theme.text} />
-              </Pressable>
-            </GlassView>
-          ) : (
-            <View style={styles.actions}>
-              <Pressable
-                onPress={onHelpPress ?? (() => {})}
-                accessibilityRole="button"
-                accessibilityLabel="Aide"
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  {
-                    backgroundColor: pillBg,
-                    borderColor: pillBorder,
-                    opacity: pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                <Ionicons name="help-circle-outline" size={20} color={theme.text} />
-              </Pressable>
-              <Pressable
-                onPress={onAddPress ?? (() => {})}
-                accessibilityRole="button"
-                accessibilityLabel="Ajouter un lieu"
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  {
-                    backgroundColor: pillBg,
-                    borderColor: pillBorder,
-                    opacity: pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                <Ionicons name="add" size={20} color={theme.text} />
-              </Pressable>
-            </View>
-          )}
+              <Ionicons name="help-circle-outline" size={20} color={theme.text} />
+            </Pressable>
+            <View style={[styles.glassActionDivider, { backgroundColor: theme.border }]} />
+            <Pressable
+              onPress={onAddPress ?? (() => {})}
+              accessibilityRole="button"
+              accessibilityLabel="Ajouter un lieu"
+              style={styles.glassActionPressable}
+            >
+              <Ionicons name="add" size={20} color={theme.text} />
+            </Pressable>
+          </GlassView>
         </View>
       </View>
     </View>
@@ -185,10 +136,11 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8,
   },
-  blur: {
+  glassHeader: {
     borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
+    overflow: 'visible',
+    margin: -2,
+    padding: 2,
   },
   headerShell: {
     position: 'relative',
@@ -238,27 +190,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 0,
-    overflow: 'visible',
-  },
-  actionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-  },
   glassActionsBar: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 44,
     borderRadius: 22,
-    marginVertical: -2,
-    padding: 2,
+    margin: -2,
+    padding: 4,
     overflow: 'visible',
   },
   actionsOverlay: {

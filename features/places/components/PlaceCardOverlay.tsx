@@ -290,40 +290,41 @@ export default function PlaceCardOverlay({
                 {cardAddress}
               </Text>
             ) : null}
-            <View style={s.chips}>
-              {googleRating ? (
-                <View style={s.chipRow}>
-                  <Ionicons name="star" size={11} color="#faad14" />
-                  <Text style={[s.chipText, { color: textColor }]}>{googleRating.toFixed(1)}</Text>
+            <View style={s.chipsBar}>
+              <View style={s.chipsLeft}>
+                {googleRating ? (
+                  <View style={s.chipRow}>
+                    <Ionicons name="star" size={11} color="#faad14" />
+                    <Text style={[s.chipText, { color: textColor }]}>{googleRating.toFixed(1)}</Text>
+                  </View>
+                ) : null}
+                {effectiveRating > 0 ? (
+                  <View style={s.chipRow}>
+                    <Ionicons name="heart" size={10} color="#ff6b9d" />
+                    <Text style={[s.chipText, { color: mutedColor }]}>{effectiveRating}/5</Text>
+                  </View>
+                ) : null}
+                {providerInfo ? (
+                  <View style={s.chipRow}>
+                    <FontAwesome5 name={providerInfo.icon} size={10} color={mutedColor} brand />
+                    <Text style={[s.chipText, { color: mutedColor }]}>{providerInfo.label}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={[s.chipRow, s.chipsTestedRight]} pointerEvents="box-none">
+                <Text style={[s.chipText, { color: mutedColor }]}>Testé</Text>
+                <View style={s.compactSwitchScale}>
+                  <Switch
+                    value={effectiveTested}
+                    onValueChange={handleTestedToggle}
+                    trackColor={{ false: isDark ? '#39393D' : '#e0e0e0', true: '#34C759' }}
+                    thumbColor="#fff"
+                  />
                 </View>
-              ) : null}
-              {effectiveRating > 0 ? (
-                <View style={s.chipRow}>
-                  <Ionicons name="heart" size={10} color="#ff6b9d" />
-                  <Text style={[s.chipText, { color: mutedColor }]}>{effectiveRating}/5</Text>
-                </View>
-              ) : null}
-              {providerInfo ? (
-                <View style={s.chipRow}>
-                  <FontAwesome5 name={providerInfo.icon} size={10} color={mutedColor} brand />
-                  <Text style={[s.chipText, { color: mutedColor }]}>{providerInfo.label}</Text>
-                </View>
-              ) : null}
+              </View>
             </View>
           </View>
         </Pressable>
-        {/* Absolute: native Switch keeps full layout size when scaled — was clipped by card overflow */}
-        <View style={s.compactTestedCorner} pointerEvents="box-none">
-          <Text style={[s.compactTestedLabel, { color: mutedColor }]}>Testé</Text>
-          <View style={s.compactSwitchScale}>
-            <Switch
-              value={effectiveTested}
-              onValueChange={handleTestedToggle}
-              trackColor={{ false: isDark ? '#39393D' : '#e0e0e0', true: '#34C759' }}
-              thumbColor="#fff"
-            />
-          </View>
-        </View>
       </View>
     </View>
   );
@@ -641,42 +642,41 @@ const s = StyleSheet.create({
     minWidth: 0,
     paddingLeft: 4,
   },
-  compactTestedCorner: {
-    position: 'absolute',
-    right: 10,
-    bottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    zIndex: 2,
-  },
-  compactTestedLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-    marginBottom: 1,
-  },
-  /** Scale wrapper: keeps hit target; transform still uses full RN layout size — absolute avoids card clip. */
+  /** Scale wrapper: Switch keeps full layout size when scaled — negative margin pulls visual switch closer to “Testé” chip text. */
   compactSwitchScale: {
     transform: [{ scaleX: 0.58 }, { scaleY: 0.58 }],
+    marginLeft: -2,
     marginRight: Platform.OS === 'ios' ? -10 : -6,
-    marginBottom: Platform.OS === 'ios' ? -2 : 0,
+    marginVertical: Platform.OS === 'ios' ? -4 : -2,
   },
   thumbOuter: { width: 72, height: 72, borderRadius: 14, overflow: 'hidden' },
   thumbImg: { width: '100%', height: '100%' },
   thumbFallback: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   thumbEmoji: { fontSize: 26 },
-  /** paddingRight: text only — keeps thumb full width; stops 2nd address line / chips drawing under “Testé”+switch */
   compactInfo: {
     flex: 1,
     justifyContent: 'center',
     gap: 3,
     minWidth: 0,
-    paddingRight: 62,
   },
   compactName: { fontSize: 16, fontWeight: '600', lineHeight: 21 },
   compactAddr: { fontSize: 13, lineHeight: 17 },
-  chips: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3, flexWrap: 'wrap' },
+  chipsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 3,
+  },
+  chipsLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  chipsTestedRight: { flexShrink: 0, gap: 4 },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   chipText: { fontSize: 12, fontWeight: '500', lineHeight: 16 },
 
