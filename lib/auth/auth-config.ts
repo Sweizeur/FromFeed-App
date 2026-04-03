@@ -10,8 +10,8 @@ export const isDevelopment = () =>
 export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 export const GOOGLE_CLIENT_ID_IOS = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS || '';
-export const GOOGLE_CLIENT_ID_WEB = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || '';
-export const GOOGLE_CLIENT_ID = Platform.OS === 'ios' ? GOOGLE_CLIENT_ID_IOS : GOOGLE_CLIENT_ID_WEB;
+/** Client Google OAuth (même ID iOS/Android pour l’app native). */
+export const GOOGLE_CLIENT_ID = GOOGLE_CLIENT_ID_IOS;
 
 export const TOKEN_STORAGE_KEY = 'fromfeed_auth_token';
 export const USER_STORAGE_KEY = 'fromfeed_auth_user';
