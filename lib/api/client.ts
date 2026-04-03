@@ -3,6 +3,27 @@ import Constants from 'expo-constants';
 
 export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
+/**
+ * Préfixe les routes métier avec `/api/v1`. Laisse `/api/auth` et `/api/v1` inchangés.
+ */
+export function resolveVersionedEndpoint(endpoint: string): string {
+  const qIdx = endpoint.indexOf('?');
+  const pathPart = qIdx >= 0 ? endpoint.slice(0, qIdx) : endpoint;
+  const query = qIdx >= 0 ? endpoint.slice(qIdx) : '';
+
+  if (!pathPart.startsWith('/api/')) {
+    return endpoint;
+  }
+  if (pathPart === '/api/auth' || pathPart.startsWith('/api/auth/')) {
+    return endpoint;
+  }
+  if (pathPart === '/api/v1' || pathPart.startsWith('/api/v1/')) {
+    return endpoint;
+  }
+  const rest = pathPart.slice(5);
+  return `/api/v1/${rest}${query}`;
+}
+
 const isDevelopment = () =>
   __DEV__ &&
   process.env.NODE_ENV !== 'production' &&
@@ -39,7 +60,8 @@ export async function apiRequest<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  devLog('[API] Requête vers:', `${BACKEND_URL}${endpoint}`, 'Method:', options.method || 'GET');
+  const resolved = resolveVersionedEndpoint(endpoint);
+  devLog('[API] Requête vers:', `${BACKEND_URL}${resolved}`, 'Method:', options.method || 'GET');
 
   if (BACKEND_URL.includes('ngrok')) {
     headers['ngrok-skip-browser-warning'] = 'true';
@@ -50,7 +72,7 @@ export async function apiRequest<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${BACKEND_URL}${endpoint}`, {
+    response = await fetch(`${BACKEND_URL}${resolved}`, {
       ...fetchOptions,
       headers,
       signal: controller.signal,
@@ -59,7 +81,7 @@ export async function apiRequest<T>(
     clearTimeout(timeoutId);
     const err = error as { name?: string; message?: string };
     if (err.name === 'AbortError') {
-      devError('[API] Timeout:', endpoint);
+      devError('[API] Timeout:', resolved);
       return null;
     }
     const isNetworkError =

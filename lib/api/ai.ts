@@ -1,4 +1,4 @@
-import { apiRequest, BACKEND_URL, devLog, devError, devWarn } from './client';
+import { apiRequest, BACKEND_URL, resolveVersionedEndpoint, devLog, devError, devWarn } from './client';
 import { getStoredToken } from '../auth/auth-mobile';
 
 let isStreamingActive = false;
@@ -22,13 +22,14 @@ export async function sendAIMessageStreaming(
     return;
   }
 
+  const chatWsPath = resolveVersionedEndpoint('/api/ai/chat/ws');
   let wsUrl: string;
   if (BACKEND_URL.startsWith('https://')) {
-    wsUrl = BACKEND_URL.replace('https://', 'wss://') + '/api/ai/chat/ws';
+    wsUrl = BACKEND_URL.replace('https://', 'wss://') + chatWsPath;
   } else if (BACKEND_URL.startsWith('http://')) {
-    wsUrl = BACKEND_URL.replace('http://', 'ws://') + '/api/ai/chat/ws';
+    wsUrl = BACKEND_URL.replace('http://', 'ws://') + chatWsPath;
   } else {
-    wsUrl = `wss://${BACKEND_URL}/api/ai/chat/ws`;
+    wsUrl = `wss://${BACKEND_URL}${chatWsPath}`;
   }
 
   return new Promise<void>((resolve, reject) => {

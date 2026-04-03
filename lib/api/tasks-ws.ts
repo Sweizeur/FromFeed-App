@@ -1,4 +1,4 @@
-import { BACKEND_URL } from './client';
+import { BACKEND_URL, resolveVersionedEndpoint } from './client';
 import { getStoredToken } from '../auth/auth-mobile';
 
 export type TaskWsStatus = 'done' | 'failed';
@@ -17,9 +17,10 @@ type Subscription = {
 };
 
 function buildWsUrl(): string {
-  if (BACKEND_URL.startsWith('https://')) return BACKEND_URL.replace('https://', 'wss://') + '/api/tasks/ws';
-  if (BACKEND_URL.startsWith('http://')) return BACKEND_URL.replace('http://', 'ws://') + '/api/tasks/ws';
-  return `wss://${BACKEND_URL}/api/tasks/ws`;
+  const path = resolveVersionedEndpoint('/api/tasks/ws');
+  if (BACKEND_URL.startsWith('https://')) return BACKEND_URL.replace('https://', 'wss://') + path;
+  if (BACKEND_URL.startsWith('http://')) return BACKEND_URL.replace('http://', 'ws://') + path;
+  return `wss://${BACKEND_URL}${path}`;
 }
 
 const HEARTBEAT_INTERVAL_MS = 15_000;

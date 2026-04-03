@@ -10,6 +10,7 @@ import {
 import { close, Text } from 'expo-share-extension';
 import * as SecureStore from 'expo-secure-store';
 import { Colors, darkColor, darkColorWithAlpha } from '@/constants/theme';
+import { resolveVersionedEndpoint } from '@/lib/api/client';
 
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3001';
@@ -66,7 +67,7 @@ async function sendLink(url: string): Promise<{ taskId?: string }> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BACKEND_URL}/api/tasks`, {
+  const res = await fetch(`${BACKEND_URL}${resolveVersionedEndpoint('/api/tasks')}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ url }),
@@ -98,7 +99,7 @@ async function sendNoteImport(noteText: string): Promise<{ taskId?: string }> {
     Authorization: `Bearer ${token}`,
   };
 
-  const res = await fetch(`${BACKEND_URL}/api/tasks`, {
+  const res = await fetch(`${BACKEND_URL}${resolveVersionedEndpoint('/api/tasks')}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ noteText }),

@@ -71,3 +71,5 @@ pnpm test
 3. Lancer `pnpm start` dans `fromfeed-app` (ou `pnpm ios` / `pnpm android`).
 
 Les routes d’auth mobile et le header `Authorization: Bearer` sont décrites dans le README du backend.
+
+Le métier backend est sous **`/api/v1`** ; `lib/api/client.ts` réécrit automatiquement les chemins `/api/...` (sauf `/api/auth`) vers `/api/v1/...` pour les requêtes HTTP et les WebSockets concernés.
